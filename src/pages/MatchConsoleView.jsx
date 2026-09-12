@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
 import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
-import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X } from 'lucide-react';
+import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft } from 'lucide-react';
+import ArenaBackground from '../components/ArenaBackground';
 
 export default function MatchConsoleView() {
+  const navigate = useNavigate();
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [players, setPlayers] = useState([]);
@@ -346,12 +349,31 @@ export default function MatchConsoleView() {
   const joinUrl = match ? `${window.location.origin}/play?room=${match.room_code}` : '';
 
   return (
-    <div style={darkPageStyle}>
+    <ArenaBackground>
+      <div style={darkPageStyle}>
       {/* Console Header */}
       <header style={headerStyle}>
-        <div>
-          <h1 className="brand-title" style={{ fontSize: '2rem' }}>AI-DEATH ARENA</h1>
-          <p style={{ color: '#A29BFE', fontSize: '0.85rem', fontWeight: 600 }}>MATCH CONSOLE — HOST & PROJECTOR VIEW</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button
+            onClick={() => navigate('/')}
+            className="btn"
+            style={{
+              background: 'rgba(255, 255, 255, 0.12)',
+              color: '#FFFFFF',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+              padding: '0.55rem 1.1rem',
+              fontSize: '0.95rem',
+              backdropFilter: 'blur(8px)'
+            }}
+          >
+            <ArrowLeft size={20} /> BACK TO HOME
+          </button>
+
+          <div>
+            <h1 className="brand-title" style={{ fontSize: '2rem' }}>AI-DEATH ARENA</h1>
+            <p style={{ color: '#A29BFE', fontSize: '0.95rem', fontWeight: 700, letterSpacing: '1px' }}>AI KNOWLEDGE CHECK ⚡ GEN-Z ARENA EDITION</p>
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -873,14 +895,15 @@ export default function MatchConsoleView() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </ArenaBackground>
   );
 }
 
 // Custom CSS Styles for Projector Match Console
 const darkPageStyle = {
   minHeight: '100vh',
-  backgroundColor: '#0D0B1D',
+  backgroundColor: 'transparent',
   color: '#FFFFFF',
   padding: '2rem',
   display: 'flex',

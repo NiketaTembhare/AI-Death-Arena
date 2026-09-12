@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
-import { CheckCircle2, XCircle, Clock, Award, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, ArrowLeft } from 'lucide-react';
+import ArenaBackground from '../components/ArenaBackground';
 
 export default function PlayerView() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const roomCodeParam = searchParams.get('room') || '';
 
@@ -370,7 +372,7 @@ export default function PlayerView() {
 
   const handleOverrideRepeat = (e) => {
     e.preventDefault();
-    if (overridePin === '1234') {
+    if (overridePin === '2004') {
       setIsRepeatPlayer(false);
     } else {
       alert('Invalid Host PIN');
@@ -436,52 +438,71 @@ export default function PlayerView() {
   if (!player) {
     const isNameValid = nameInput.trim().length > 0;
     return (
-      <div style={playerContainerStyle}>
-        <div className="card-light" style={{ width: '100%', maxWidth: '380px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <h1 className="brand-title" style={{ fontSize: '1.8rem' }}>AI-DEATH ARENA</h1>
-            <p style={{ color: '#636E72', fontWeight: 600, fontSize: '0.9rem' }}>JOIN ARENA MATCH</p>
+      <ArenaBackground>
+        <div style={playerContainerStyle}>
+          <div style={{ width: '100%', maxWidth: '380px', marginBottom: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
+            <button
+              onClick={() => navigate('/')}
+              className="btn"
+              style={{
+                background: 'rgba(255, 255, 255, 0.15)',
+                color: '#FFFFFF',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                padding: '0.4rem 0.85rem',
+                fontSize: '0.85rem',
+                backdropFilter: 'blur(8px)'
+              }}
+            >
+              <ArrowLeft size={16} /> HOME
+            </button>
           </div>
 
-          <form onSubmit={handleJoinGame}>
-            <label style={{ fontWeight: 700, fontSize: '0.9rem', color: '#2D3436', display: 'block', marginBottom: '0.5rem' }}>
-              YOUR DISPLAY NAME
-            </label>
-            <input
-              type="text"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              placeholder="Enter your name..."
-              autoFocus
-              maxLength={15}
-              style={{
-                width: '100%',
-                padding: '1rem',
-                fontSize: '1.25rem',
-                fontWeight: 700,
-                borderRadius: '16px',
-                border: '2px solid #6C5CE7',
-                marginBottom: '1rem',
-                outline: 'none'
-              }}
-            />
-            {!isNameValid && (
-              <p style={{ color: '#FF7675', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: 600 }}>
-                Please enter your name to join
-              </p>
-            )}
+          <div className="card-light" style={{ width: '100%', maxWidth: '380px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <h1 className="brand-title" style={{ fontSize: '1.8rem' }}>AI-DEATH ARENA</h1>
+              <p style={{ color: '#636E72', fontWeight: 600, fontSize: '0.9rem' }}>JOIN ARENA MATCH</p>
+            </div>
 
-            <button
-              type="submit"
-              disabled={!isNameValid}
-              className={`btn btn-green ${!isNameValid ? 'btn-disabled' : ''}`}
-              style={{ width: '100%', fontSize: '1.25rem', padding: '1rem' }}
-            >
-              ENTER ARENA
-            </button>
-          </form>
+            <form onSubmit={handleJoinGame}>
+              <label style={{ fontWeight: 700, fontSize: '0.9rem', color: '#2D3436', display: 'block', marginBottom: '0.5rem' }}>
+                YOUR DISPLAY NAME
+              </label>
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="Enter your name..."
+                autoFocus
+                maxLength={15}
+                style={{
+                  width: '100%',
+                  padding: '1rem',
+                  fontSize: '1.25rem',
+                  fontWeight: 700,
+                  borderRadius: '16px',
+                  border: '2px solid #6C5CE7',
+                  marginBottom: '1rem',
+                  outline: 'none'
+                }}
+              />
+              {!isNameValid && (
+                <p style={{ color: '#FF7675', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: 600 }}>
+                  Please enter your name to join
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={!isNameValid}
+                className={`btn btn-green ${!isNameValid ? 'btn-disabled' : ''}`}
+                style={{ width: '100%', fontSize: '1.25rem', padding: '1rem' }}
+              >
+                ENTER ARENA
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
+      </ArenaBackground>
     );
   }
 
@@ -503,27 +524,29 @@ export default function PlayerView() {
   if (match?.status === 'lobby') {
     const avatar = getPlayerAvatar(player.display_name);
     return (
-      <div style={playerContainerStyle}>
-        <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
-          <div className="avatar-badge" style={{ background: avatar.bgColor, width: '72px', height: '72px', fontSize: '2.5rem', margin: '0 auto 1rem' }}>
-            {avatar.emoji}
-          </div>
-          <h2 style={{ fontSize: '1.8rem', color: '#2D3436' }}>{player.display_name}</h2>
-          <span style={{ display: 'inline-block', background: '#E0E7FF', color: '#4338CA', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 700, marginTop: '0.5rem', marginBottom: '2rem' }}>
-            YOU ARE IN THE LOBBY
-          </span>
+      <ArenaBackground>
+        <div style={playerContainerStyle}>
+          <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
+            <div className="avatar-badge" style={{ background: avatar.bgColor, width: '72px', height: '72px', fontSize: '2.5rem', margin: '0 auto 1rem' }}>
+              {avatar.emoji}
+            </div>
+            <h2 style={{ fontSize: '1.8rem', color: '#2D3436' }}>{player.display_name}</h2>
+            <span style={{ display: 'inline-block', background: '#E0E7FF', color: '#4338CA', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 700, marginTop: '0.5rem', marginBottom: '2rem' }}>
+              YOU ARE IN THE LOBBY
+            </span>
 
-          <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '16px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>
-            <p style={{ color: '#636E72', fontWeight: 600 }}>
-              Look at the main projector screen! The match will start when the host clicks Start Round 1.
-            </p>
-          </div>
+            <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '16px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>
+              <p style={{ color: '#636E72', fontWeight: 600 }}>
+                Look at the main projector screen! The match will start when the host clicks Start Round 1.
+              </p>
+            </div>
 
-          <button onClick={handleLeaveMatch} className="btn" style={{ background: '#DFE6E9', color: '#636E72', fontSize: '0.9rem', width: '100%' }}>
-            Leave Match
-          </button>
+            <button onClick={handleLeaveMatch} className="btn" style={{ background: '#DFE6E9', color: '#636E72', fontSize: '0.9rem', width: '100%' }}>
+              Leave Match
+            </button>
+          </div>
         </div>
-      </div>
+      </ArenaBackground>
     );
   }
 
@@ -798,7 +821,7 @@ const playerContainerStyle = {
   alignItems: 'center',
   justifyContent: 'center',
   padding: '1rem',
-  background: 'linear-gradient(135deg, #F4F5F9 0%, #E2E8F0 100%)'
+  background: 'transparent'
 };
 
 const gameplayContainerStyle = {

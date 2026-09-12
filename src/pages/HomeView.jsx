@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Trophy, Settings, Lock } from 'lucide-react';
 
+import ArenaBackground from '../components/ArenaBackground';
+
 export default function HomeView() {
   const navigate = useNavigate();
   const [showPinModal, setShowPinModal] = useState(false);
@@ -10,8 +12,8 @@ export default function HomeView() {
 
   const handleAdminAccess = (e) => {
     e.preventDefault();
-    // Single global Host PIN: 1234
-    if (pinInput === '1234') {
+    // Single global Host PIN: 2004
+    if (pinInput === '2004') {
       setShowPinModal(false);
       navigate('/admin');
     } else {
@@ -20,16 +22,16 @@ export default function HomeView() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #161334 0%, #0D0B1D 100%)',
-      color: '#FFFFFF',
-      padding: '2rem'
-    }}>
+    <ArenaBackground>
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#FFFFFF',
+        padding: '2rem'
+      }}>
       <div style={{ textAlign: 'center', maxWidth: '420px', width: '100%' }}>
         <h1 className="brand-title" style={{ fontSize: '2.5rem', marginBottom: '0.25rem' }}>
           AI-DEATH ARENA
@@ -128,5 +130,6 @@ export default function HomeView() {
         </div>
       )}
     </div>
+  </ArenaBackground>
   );
 }
