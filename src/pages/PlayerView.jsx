@@ -166,7 +166,21 @@ export default function PlayerView() {
 
     if (match.status === 'round1' || match.status === 'round2' || match.status === 'round3') {
       fetchPlayerQuestions(match.id, player.id, match.current_round);
-      handleSynchronizedCountdown(match.round_started_at, match.current_round);
+
+      const roundKey = `${match.current_round}_${match.round_started_at || match.status}`;
+      if (lastCountdownRoundRef.current !== roundKey) {
+        lastCountdownRoundRef.current = roundKey;
+
+        const startedAtMs = match.round_started_at ? new Date(match.round_started_at).getTime() : Date.now();
+        const elapsedMs = Date.now() - startedAtMs;
+
+        if (elapsedMs < 4500) {
+          triggerSynchronizedCountdown();
+        } else {
+          setCountdownNum(null);
+          startPerQuestionTimer(15);
+        }
+      }
     } else if (match.status === 'final_results') {
       const todayStr = new Date().toISOString().split('T')[0];
       localStorage.setItem('arena_completed_date', todayStr);
@@ -175,46 +189,27 @@ export default function PlayerView() {
     }
   }, [match?.status, match?.round_started_at, player?.id]);
 
-  const handleSynchronizedCountdown = (startedAtIso, roundNum) => {
-    // Avoid double countdowns for the exact same round & timestamp
-    const roundKey = `${roundNum}_${startedAtIso || ''}`;
-    if (lastCountdownRoundRef.current === roundKey) return;
-    lastCountdownRoundRef.current = roundKey;
-
+  const triggerSynchronizedCountdown = () => {
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
     }
     lastBeepedRef.current = null;
 
-    if (!startedAtIso) {
-      setCountdownNum(null);
-      startPerQuestionTimer(15);
-      return;
+    let step = 3;
+    setCountdownNum(3);
+    if (lastBeepedRef.current !== 3) {
+      lastBeepedRef.current = 3;
+      audioManager.playCountdownBeep(3);
     }
 
-    const targetMs = new Date(startedAtIso).getTime();
-
-    const updateStep = () => {
-      const remainingMs = targetMs - Date.now();
-
-      let currentStep = null;
-      if (remainingMs > 3200) {
-        currentStep = 3;
-      } else if (remainingMs > 2000) {
-        currentStep = 2;
-      } else if (remainingMs > 800) {
-        currentStep = 1;
-      } else if (remainingMs > -200) {
-        currentStep = 0; // GO!
-      } else {
-        currentStep = null; // Completed / Past
-      }
-
-      if (currentStep !== null) {
-        setCountdownNum(currentStep);
-        if (lastBeepedRef.current !== currentStep) {
-          lastBeepedRef.current = currentStep;
-          audioManager.playCountdownBeep(currentStep);
+    countdownIntervalRef.current = setInterval(() => {
+      step -= 1;
+      if (step >= 0) {
+        setCountdownNum(step);
+        if (lastBeepedRef.current !== step) {
+          lastBeepedRef.current = step;
+          audioManager.playCountdownBeep(step);
         }
       } else {
         setCountdownNum(null);
@@ -224,13 +219,7 @@ export default function PlayerView() {
         }
         startPerQuestionTimer(15);
       }
-    };
-
-    updateStep();
-
-    if (targetMs - Date.now() > -200) {
-      countdownIntervalRef.current = setInterval(updateStep, 40);
-    }
+    }, 950);
   };
 
   const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {

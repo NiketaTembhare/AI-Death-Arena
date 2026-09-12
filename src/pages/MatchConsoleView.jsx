@@ -24,41 +24,29 @@ export default function MatchConsoleView() {
   const lastBeepedRef = useRef(null);
   const hasFiredFinalCelebrationRef = useRef(false);
 
-  const handleSynchronizedCountdown = (startedAtIso) => {
+  const lastCountdownRoundRef = useRef(null);
+
+  const triggerSynchronizedCountdown = () => {
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
     }
     lastBeepedRef.current = null;
 
-    if (!startedAtIso) {
-      setCountdownNum(null);
-      setIsStartingRound(false);
-      return;
+    let step = 3;
+    setCountdownNum(3);
+    if (lastBeepedRef.current !== 3) {
+      lastBeepedRef.current = 3;
+      audioManager.playCountdownBeep(3);
     }
 
-    const targetMs = new Date(startedAtIso).getTime();
-
-    const updateStep = () => {
-      const remainingMs = targetMs - Date.now();
-
-      let currentStep = null;
-      if (remainingMs > 3200) {
-        currentStep = 3;
-      } else if (remainingMs > 2000) {
-        currentStep = 2;
-      } else if (remainingMs > 800) {
-        currentStep = 1;
-      } else if (remainingMs > -200) {
-        currentStep = 0; // GO!
-      } else {
-        currentStep = null; // Completed
-      }
-
-      if (currentStep !== null) {
-        setCountdownNum(currentStep);
-        if (lastBeepedRef.current !== currentStep) {
-          lastBeepedRef.current = currentStep;
-          audioManager.playCountdownBeep(currentStep);
+    countdownIntervalRef.current = setInterval(() => {
+      step -= 1;
+      if (step >= 0) {
+        setCountdownNum(step);
+        if (lastBeepedRef.current !== step) {
+          lastBeepedRef.current = step;
+          audioManager.playCountdownBeep(step);
         }
       } else {
         setCountdownNum(null);
@@ -68,13 +56,7 @@ export default function MatchConsoleView() {
           countdownIntervalRef.current = null;
         }
       }
-    };
-
-    updateStep();
-
-    if (targetMs - Date.now() > -200) {
-      countdownIntervalRef.current = setInterval(updateStep, 40);
-    }
+    }, 950);
   };
 
   useEffect(() => {
@@ -427,7 +409,11 @@ export default function MatchConsoleView() {
         fetchLiveLeaderboardAndProgress(newMatch.id, newMatch.current_round);
 
         if (newMatch.round_started_at && (newMatch.status === 'round1' || newMatch.status === 'round2' || newMatch.status === 'round3')) {
-          handleSynchronizedCountdown(newMatch.round_started_at);
+          const roundKey = `${newMatch.current_round}_${newMatch.round_started_at}`;
+          if (lastCountdownRoundRef.current !== roundKey) {
+            lastCountdownRoundRef.current = roundKey;
+            triggerSynchronizedCountdown();
+          }
         }
 
         if (previousStatusRef.current !== newMatch.status) {
@@ -586,8 +572,7 @@ export default function MatchConsoleView() {
       };
 
       if (isStarting) {
-        const targetTime = new Date(Date.now() + 5400).toISOString();
-        updatePayload.round_started_at = targetTime;
+        updatePayload.round_started_at = new Date().toISOString();
       }
 
       const { data, error } = await supabase
@@ -599,8 +584,10 @@ export default function MatchConsoleView() {
 
       if (!error && data) {
         setMatch(data);
-        if (isStarting && data.round_started_at) {
-          handleSynchronizedCountdown(data.round_started_at);
+        if (isStarting) {
+          const roundKey = `${data.current_round}_${data.round_started_at}`;
+          lastCountdownRoundRef.current = roundKey;
+          triggerSynchronizedCountdown();
         }
       } else {
         setIsStartingRound(false);
