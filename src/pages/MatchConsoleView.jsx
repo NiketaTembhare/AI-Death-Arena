@@ -210,21 +210,20 @@ export default function MatchConsoleView() {
     } else if (status.includes('results')) {
       audioManager.playRoundEnd();
     } else if (status === 'final_results') {
-      audioManager.playFinalFanfare();
-      audioManager.playApplauseClapping(4);
       triggerChampionsCelebration();
     }
   };
 
+  // Issue 5 & 6 Fix: Trigger confetti with zIndex 999999 and amplified celebration audio on host screen
   const triggerChampionsCelebration = () => {
-    // Play crowd applause & fanfare
+    audioManager.initContext();
     audioManager.playFinalFanfare();
-    audioManager.playApplauseClapping(4);
+    audioManager.playApplauseClapping(5.0);
 
-    // Phase 1: Immediate party popper burst from center
+    // Phase 1: Center explosive party popper burst
     setTimeout(() => {
-      const count = 250;
-      const defaults = { origin: { y: 0.6 } };
+      const count = 300;
+      const defaults = { origin: { y: 0.6 }, zIndex: 999999 };
 
       function fire(particleRatio, opts) {
         confetti({
@@ -234,41 +233,44 @@ export default function MatchConsoleView() {
         });
       }
 
-      fire(0.25, { spread: 26, startVelocity: 55 });
-      fire(0.2, { spread: 60 });
-      fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
-      fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
-      fire(0.1, { spread: 120, startVelocity: 45 });
-    }, 350);
+      fire(0.25, { spread: 35, startVelocity: 60 });
+      fire(0.2, { spread: 70 });
+      fire(0.35, { spread: 110, decay: 0.91, scalar: 0.9 });
+      fire(0.1, { spread: 130, startVelocity: 30, decay: 0.92, scalar: 1.3 });
+      fire(0.1, { spread: 130, startVelocity: 50 });
+    }, 200);
 
-    // Phase 2: Party Popper Cannons from Left and Right sides
+    // Phase 2: Dual Party Popper Cannons from Left and Right sides
     setTimeout(() => {
       confetti({
-        particleCount: 80,
+        particleCount: 100,
         angle: 60,
-        spread: 70,
-        origin: { x: 0, y: 0.75 },
+        spread: 80,
+        origin: { x: 0, y: 0.7 },
+        zIndex: 999999,
         colors: ['#FF7675', '#00B894', '#0984E3', '#FDCB6E', '#A29BFE']
       });
       confetti({
-        particleCount: 80,
+        particleCount: 100,
         angle: 120,
-        spread: 70,
-        origin: { x: 1, y: 0.75 },
+        spread: 80,
+        origin: { x: 1, y: 0.7 },
+        zIndex: 999999,
         colors: ['#FF7675', '#00B894', '#0984E3', '#FDCB6E', '#A29BFE']
       });
-    }, 900);
+    }, 700);
 
-    // Phase 3: Star Shower burst at 1.8s
+    // Phase 3: Star Shower burst
     setTimeout(() => {
       confetti({
-        particleCount: 60,
-        spread: 100,
-        origin: { y: 0.4 },
+        particleCount: 80,
+        spread: 120,
+        origin: { y: 0.3 },
+        zIndex: 999999,
         shapes: ['star'],
         colors: ['#FDCB6E', '#F1C40F', '#E67E22', '#FFFFFF']
       });
-    }, 1800);
+    }, 1500);
   };
 
   // State A action: Start New Match (auto-archive non-final active matches)
@@ -307,7 +309,17 @@ export default function MatchConsoleView() {
     }
   };
 
-  // Helper to assign random round questions per player
+  // Fisher-Yates shuffle to guarantee distinct random sampling
+  const fisherYatesShuffle = (array) => {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
+
+  // Helper to assign 5 distinct round questions per player
   const assignRoundQuestionsForPlayers = async (matchId, roundNum) => {
     const { data: allQuestions } = await supabase
       .from('questions')
@@ -322,21 +334,33 @@ export default function MatchConsoleView() {
       .select('id')
       .eq('match_id', matchId);
 
-    if (!currentPlayers) return;
+    if (!currentPlayers || currentPlayers.length === 0) return;
+
+    // Delete existing question assignments for this match & round first to prevent duplicates
+    await supabase
+      .from('match_round_questions')
+      .delete()
+      .eq('match_id', matchId)
+      .eq('round', roundNum);
 
     const rowsToInsert = [];
     currentPlayers.forEach((player) => {
-      const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
-      const selected = shuffled.slice(0, 5);
+      const shuffled = fisherYatesShuffle(allQuestions);
+      const selected = shuffled.slice(0, Math.min(5, shuffled.length));
 
-      selected.forEach((q, idx) => {
-        rowsToInsert.push({
-          match_id: matchId,
-          player_id: player.id,
-          round: roundNum,
-          question_id: q.id,
-          position: idx + 1
-        });
+      const uniqueIds = new Set();
+      let pos = 1;
+      selected.forEach((q) => {
+        if (!uniqueIds.has(q.id)) {
+          uniqueIds.add(q.id);
+          rowsToInsert.push({
+            match_id: matchId,
+            player_id: player.id,
+            round: roundNum,
+            question_id: q.id,
+            position: pos++
+          });
+        }
       });
     });
 

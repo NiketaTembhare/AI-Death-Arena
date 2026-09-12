@@ -4,6 +4,27 @@ class AudioManager {
     this.ctx = null;
     this.isMuted = localStorage.getItem('arena_sound_muted') === 'true';
     this.listeners = new Set();
+    this.activeTimeouts = [];
+
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      // Issue 4 Fix: Pause all audio when tab/app loses visibility
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          this.pauseAllAudio();
+        } else {
+          this.initContext();
+        }
+      });
+
+      // User interaction listener to reliably unlock Web Audio API Context
+      const unlockAudio = () => {
+        this.initContext();
+        window.removeEventListener('touchstart', unlockAudio);
+        window.removeEventListener('click', unlockAudio);
+      };
+      window.addEventListener('touchstart', unlockAudio, { passive: true });
+      window.addEventListener('click', unlockAudio, { passive: true });
+    }
   }
 
   initContext() {
@@ -16,6 +37,28 @@ class AudioManager {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+  }
+
+  pauseAllAudio() {
+    this.activeTimeouts.forEach((id) => clearTimeout(id));
+    this.activeTimeouts = [];
+
+    if (this.ctx && this.ctx.state === 'running') {
+      try {
+        this.ctx.suspend();
+      } catch (e) {
+        console.warn('Audio suspend error', e);
+      }
+    }
+  }
+
+  safeTimeout(fn, ms) {
+    const id = setTimeout(() => {
+      this.activeTimeouts = this.activeTimeouts.filter((tId) => tId !== id);
+      fn();
+    }, ms);
+    this.activeTimeouts.push(id);
+    return id;
   }
 
   toggleMute() {
@@ -64,11 +107,11 @@ class AudioManager {
       // Clear, musical rising chime for numbers 4, 3, 2, 1
       const pitches = { 4: 440, 3: 523.25, 2: 659.25, 1: 783.99 };
       const freq = pitches[number] || 523.25;
-      this.playBeep(freq, 'sine', 0.22, 0.45);
+      this.playBeep(freq, 'sine', 0.22, 0.55);
     } else {
       // Energetic "GO!" launch chime
-      this.playBeep(1046.5, 'triangle', 0.35, 0.55);
-      setTimeout(() => this.playBeep(1318.51, 'sine', 0.3, 0.45), 80);
+      this.playBeep(1046.5, 'triangle', 0.35, 0.65);
+      this.safeTimeout(() => this.playBeep(1318.51, 'sine', 0.3, 0.55), 80);
     }
   }
 
@@ -76,15 +119,14 @@ class AudioManager {
     if (this.isMuted) return;
     this.initContext();
     if (!this.ctx) return;
-    const now = this.ctx.currentTime;
     [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
-      setTimeout(() => this.playBeep(freq, 'sine', 0.18, 0.3), i * 80);
+      this.safeTimeout(() => this.playBeep(freq, 'sine', 0.18, 0.35), i * 80);
     });
   }
 
   playWrong() {
     if (this.isMuted) return;
-    this.playBeep(180, 'sawtooth', 0.35, 0.4);
+    this.playBeep(180, 'sawtooth', 0.35, 0.45);
   }
 
   playRoundStart() {
@@ -92,7 +134,7 @@ class AudioManager {
     this.initContext();
     if (!this.ctx) return;
     [300, 450, 600, 900].forEach((freq, i) => {
-      setTimeout(() => this.playBeep(freq, 'triangle', 0.25, 0.35), i * 90);
+      this.safeTimeout(() => this.playBeep(freq, 'triangle', 0.25, 0.45), i * 90);
     });
   }
 
@@ -101,7 +143,7 @@ class AudioManager {
     this.initContext();
     if (!this.ctx) return;
     [587.33, 659.25, 783.99, 880].forEach((freq, i) => {
-      setTimeout(() => this.playBeep(freq, 'sine', 0.3, 0.4), i * 110);
+      this.safeTimeout(() => this.playBeep(freq, 'sine', 0.3, 0.45), i * 110);
     });
   }
 
@@ -111,20 +153,19 @@ class AudioManager {
     if (!this.ctx) return;
     const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
     notes.forEach((freq, i) => {
-      setTimeout(() => this.playBeep(freq, 'triangle', 0.4, 0.45), i * 140);
+      this.safeTimeout(() => this.playBeep(freq, 'triangle', 0.4, 0.75), i * 140);
     });
   }
 
-  playApplauseClapping(durationSec = 3.5) {
+  playApplauseClapping(durationSec = 4.5) {
     if (this.isMuted) return;
     this.initContext();
     if (!this.ctx) return;
 
     try {
       const now = this.ctx.currentTime;
-      const totalClaps = Math.floor(durationSec * 35); // ~35 claps per second from crowd
+      const totalClaps = Math.floor(durationSec * 45); // High density crowd clapping
 
-      // Generate a short 0.05s noise buffer for single clap snap
       const bufferSize = Math.floor(this.ctx.sampleRate * 0.06);
       const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
@@ -138,14 +179,13 @@ class AudioManager {
         const whiteNoise = this.ctx.createBufferSource();
         whiteNoise.buffer = noiseBuffer;
 
-        // Bandpass filter for natural palm clap frequency
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'bandpass';
-        filter.frequency.value = 1000 + Math.random() * 1800; // 1000Hz - 2800Hz
-        filter.Q.value = 1.2;
+        filter.frequency.value = 900 + Math.random() * 2200;
+        filter.Q.value = 1.1;
 
         const gain = this.ctx.createGain();
-        const clapVolume = 0.08 + Math.random() * 0.22;
+        const clapVolume = 0.25 + Math.random() * 0.45; // Increased volume for host/projector screen
         gain.gain.setValueAtTime(clapVolume, clapTime);
         gain.gain.exponentialRampToValueAtTime(0.001, clapTime + 0.05);
 
