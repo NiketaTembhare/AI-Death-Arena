@@ -298,6 +298,105 @@ class AudioManager {
       console.warn('Error synthesizing applause sound:', e);
     }
   }
+
+  // 1. 5-Second Urgency Warning Tick (rising tension pulse)
+  playUrgencyTick(secondsRemaining = 5) {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const pitches = { 5: 600, 4: 720, 3: 880, 2: 1080, 1: 1320 };
+    const freq = pitches[secondsRemaining] || 880;
+    this.playBeep(freq, 'triangle', 0.08, 0.4);
+
+    // Double pulse for the final 1 second for extra urgency
+    if (secondsRemaining === 1) {
+      setTimeout(() => this.playBeep(1480, 'sine', 0.07, 0.45), 140);
+    }
+  }
+
+  // 2. New Player Joined Lobby Chime (bright welcoming power-up)
+  playPlayerJoined() {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const notes = [523.25, 783.99, 1046.5]; // C5 -> G5 -> C6
+    notes.forEach((freq, i) => {
+      setTimeout(() => this.playBeep(freq, 'sine', 0.14, 0.35), i * 90);
+    });
+  }
+
+  // 3. Dramatic Snare Drumroll for Round Results Reveal
+  playDrumroll(durationSec = 1.4) {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    try {
+      const now = this.ctx.currentTime;
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.04);
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+      }
+
+      // Snare roll pulses accelerating with crescendo
+      const pulseCount = 28;
+      for (let i = 0; i < pulseCount; i++) {
+        const progress = i / pulseCount;
+        const hitTime = now + (progress * durationSec);
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1800 + progress * 800; // 1800Hz -> 2600Hz
+        filter.Q.value = 1.5;
+
+        const gain = this.ctx.createGain();
+        const volume = 0.06 + Math.pow(progress, 1.8) * 0.4;
+        gain.gain.setValueAtTime(volume, hitTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, hitTime + 0.04);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        noise.start(hitTime);
+        noise.stop(hitTime + 0.04);
+      }
+
+      // Final punch hit at the end of drumroll
+      const finishTime = now + durationSec;
+      setTimeout(() => {
+        if (this.isMuted || !this.ctx) return;
+        // Low bass punch
+        try {
+          const kickOsc = this.ctx.createOscillator();
+          const kickGain = this.ctx.createGain();
+          kickOsc.frequency.setValueAtTime(140, this.ctx.currentTime);
+          kickOsc.frequency.exponentialRampToValueAtTime(35, this.ctx.currentTime + 0.3);
+          kickGain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+          kickGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
+
+          kickOsc.connect(kickGain);
+          kickGain.connect(this.ctx.destination);
+          kickOsc.start();
+          kickOsc.stop(this.ctx.currentTime + 0.3);
+
+          // Cymbal shimmer hit
+          this.playBeep(1200, 'triangle', 0.35, 0.4);
+        } catch (e) {
+          // ignore
+        }
+      }, durationSec * 1000);
+    } catch (e) {
+      console.warn('Error synthesizing drumroll:', e);
+    }
+  }
 }
 
 export const audioManager = new AudioManager();

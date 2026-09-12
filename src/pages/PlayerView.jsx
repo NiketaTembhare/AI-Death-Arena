@@ -178,7 +178,8 @@ export default function PlayerView() {
     const targetMs = new Date(startedAtIso).getTime();
     const nowMs = Date.now();
 
-    if (nowMs - targetMs > 1000) {
+    // If target timestamp is more than 3.5s in the past, round has already started
+    if (nowMs - targetMs > 3500) {
       setCountdownNum(null);
       return;
     }
@@ -193,13 +194,13 @@ export default function PlayerView() {
       const remainingMs = targetMs - currentNow;
 
       let currentStep = null;
-      if (remainingMs > 2200) {
+      if (remainingMs > 2800) {
         currentStep = 3;
-      } else if (remainingMs > 1200) {
+      } else if (remainingMs > 1800) {
         currentStep = 2;
-      } else if (remainingMs > 200) {
+      } else if (remainingMs > 800) {
         currentStep = 1;
-      } else if (remainingMs > -800) {
+      } else if (remainingMs > -600) {
         currentStep = 0; // GO!
       } else {
         currentStep = null;
@@ -284,6 +285,7 @@ export default function PlayerView() {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     questionStartTimeRef.current = Date.now();
     const targetEndMs = Date.now() + durationSec * 1000;
+    let lastUrgencySec = null;
 
     setTimeLeftSec(durationSec);
 
@@ -293,15 +295,27 @@ export default function PlayerView() {
 
       setTimeLeftSec(remainingSec);
 
+      // Play rising urgency warning tick on the last 5 seconds (5, 4, 3, 2, 1)
+      if (remainingSec <= 5 && remainingSec > 0 && lastUrgencySec !== remainingSec) {
+        lastUrgencySec = remainingSec;
+        audioManager.playUrgencyTick(remainingSec);
+      }
+
       if (remainingMs <= 0) {
         clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
         handleTimeoutOrAutoAdvance();
       }
-    }, 200);
+    }, 150);
   };
 
   const submitAnswer = async (chosenOption) => {
     if (isAnswerSubmitted || !match || !player || !questions[currentQIndex]) return;
+
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
 
     setIsAnswerSubmitted(true);
     setSelectedOption(chosenOption);

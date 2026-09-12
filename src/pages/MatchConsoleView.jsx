@@ -27,8 +27,8 @@ export default function MatchConsoleView() {
     const targetMs = new Date(startedAtIso).getTime();
     const nowMs = Date.now();
 
-    // If target timestamp is already over 1s in the past, skip
-    if (nowMs - targetMs > 1000) {
+    // If target timestamp is more than 3.5s in the past, skip
+    if (nowMs - targetMs > 3500) {
       setCountdownNum(null);
       setIsStartingRound(false);
       return;
@@ -44,13 +44,13 @@ export default function MatchConsoleView() {
       const remainingMs = targetMs - currentNow;
 
       let currentStep = null;
-      if (remainingMs > 2200) {
+      if (remainingMs > 2800) {
         currentStep = 3;
-      } else if (remainingMs > 1200) {
+      } else if (remainingMs > 1800) {
         currentStep = 2;
-      } else if (remainingMs > 200) {
+      } else if (remainingMs > 800) {
         currentStep = 1;
-      } else if (remainingMs > -800) {
+      } else if (remainingMs > -600) {
         currentStep = 0; // GO!
       } else {
         currentStep = null; // Completed
@@ -285,7 +285,8 @@ export default function MatchConsoleView() {
     if (status.startsWith('round') && !status.includes('results')) {
       // Countdown takes care of synchronized voice and audio chimes
     } else if (status.includes('results')) {
-      audioManager.playRoundEnd();
+      audioManager.playDrumroll(1.3);
+      setTimeout(() => audioManager.playRoundEnd(), 1300);
     } else if (status === 'final_results') {
       audioManager.playFinalFanfare();
       audioManager.playApplauseClapping(4);
@@ -321,8 +322,11 @@ export default function MatchConsoleView() {
     // Subscribe to joined players
     const playerChannel = supabase
       .channel(`players_${match.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_players', filter: `match_id=eq.${match.id}` }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_players', filter: `match_id=eq.${match.id}` }, (payload) => {
         fetchLiveLeaderboardAndProgress(match.id, matchRef.current?.current_round);
+        if (payload.eventType === 'INSERT' && matchRef.current?.status === 'lobby') {
+          audioManager.playPlayerJoined();
+        }
       })
       .subscribe();
 
@@ -445,19 +449,22 @@ export default function MatchConsoleView() {
       setIsStartingRound(true);
     }
 
-    const updatePayload = {
-      status: nextStatus,
-      current_round: roundNum
-    };
-
-    if (isStarting) {
-      const targetTime = new Date(Date.now() + 3400).toISOString();
-      updatePayload.round_started_at = targetTime;
-
-      await assignRoundQuestionsForPlayers(match.id, roundNum);
-    }
-
     try {
+      if (isStarting) {
+        // Assign questions first so DB latency doesn't burn the countdown window
+        await assignRoundQuestionsForPlayers(match.id, roundNum);
+      }
+
+      const updatePayload = {
+        status: nextStatus,
+        current_round: roundNum
+      };
+
+      if (isStarting) {
+        const targetTime = new Date(Date.now() + 4200).toISOString();
+        updatePayload.round_started_at = targetTime;
+      }
+
       const { data, error } = await supabase
         .from('matches')
         .update(updatePayload)
