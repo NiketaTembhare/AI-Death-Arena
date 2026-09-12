@@ -177,7 +177,7 @@ export default function PlayerView() {
 
   const handleSynchronizedCountdown = (startedAtIso, roundNum) => {
     // Avoid double countdowns for the exact same round
-    const roundKey = `${roundNum || ''}_${startedAtIso || ''}`;
+    const roundKey = `${roundNum}_${startedAtIso || ''}`;
     if (lastCountdownRoundRef.current === roundKey) return;
     lastCountdownRoundRef.current = roundKey;
 
@@ -186,12 +186,19 @@ export default function PlayerView() {
     }
     lastBeepedRef.current = null;
 
-    if (!startedAtIso) return;
-    const targetMs = new Date(startedAtIso).getTime();
+    let targetMs = startedAtIso ? new Date(startedAtIso).getTime() : Date.now() + 3500;
+    const nowMs = Date.now();
+    let remaining = targetMs - nowMs;
 
-    const updateTick = () => {
-      const nowMs = Date.now();
-      const remainingMs = targetMs - nowMs;
+    // Fallback: If network latency or clock skew caused targetMs to be in the past or far future,
+    // guarantee a smooth local 3.2-second GET READY countdown for the player!
+    if (remaining <= 500 || remaining > 8000) {
+      targetMs = Date.now() + 3200;
+    }
+
+    countdownIntervalRef.current = setInterval(() => {
+      const currentNow = Date.now();
+      const remainingMs = targetMs - currentNow;
 
       let currentStep = null;
       if (remainingMs > 2200) {
@@ -218,14 +225,9 @@ export default function PlayerView() {
           clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = null;
         }
-        if (roundNum) {
-          startPerQuestionTimer(15);
-        }
+        startPerQuestionTimer(15);
       }
-    };
-
-    updateTick();
-    countdownIntervalRef.current = setInterval(updateTick, 30);
+    }, 40);
   };
 
   const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {
@@ -620,7 +622,7 @@ export default function PlayerView() {
     return (
       <div key={currentQ.id} style={gameplayContainerStyle}>
         {/* Mobile Top Header Bar */}
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem', flexShrink: 0 }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div className="avatar-badge" style={{ background: avatar.bgColor, width: '32px', height: '32px', fontSize: '1rem' }}>
               {avatar.emoji}
@@ -629,21 +631,21 @@ export default function PlayerView() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ background: '#6C5CE7', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '999px', fontWeight: 800, fontSize: '0.82rem' }}>
+            <span style={{ background: '#6C5CE7', color: '#FFFFFF', padding: '0.25rem 0.6rem', borderRadius: '999px', fontWeight: 800, fontSize: '0.85rem' }}>
               {currentQIndex + 1} / 5
             </span>
-            <span className="timer-pill" style={{ fontSize: '0.88rem', padding: '0.2rem 0.6rem' }}>
+            <span className="timer-pill" style={{ fontSize: '0.9rem', padding: '0.25rem 0.6rem' }}>
               <Clock size={14} /> {timeLeftSec}s
             </span>
           </div>
         </header>
 
         {/* Question Title & Prompt */}
-        <div style={{ textAlign: 'center', marginBottom: '0.25rem', flexShrink: 0 }}>
-          <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '0.3rem', marginTop: currentQ.round === 1 ? '1.25rem' : '0' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
             ROUND {currentQ.round} — {currentQ.round === 1 ? 'REAL OR FAKE?' : currentQ.round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
           </span>
-          <h2 style={{ fontSize: 'clamp(0.95rem, 3.8vw, 1.15rem)', color: '#2D3436', marginTop: '0.1rem', lineHeight: '1.25', margin: '0.1rem 0 0' }}>
+          <h2 style={{ fontSize: '1.05rem', color: '#2D3436', marginTop: '0.1rem', lineHeight: '1.2' }}>
             {currentQ.round === 3 ? 'Which AI concept or tool do these emojis represent?' : currentQ.prompt_text}
           </h2>
         </div>
@@ -654,46 +656,43 @@ export default function PlayerView() {
             background: answerResult.isCorrect ? '#E6FFFA' : '#FFF5F5',
             border: `2px solid ${answerResult.isCorrect ? '#38B2AC' : '#E53E3E'}`,
             borderRadius: '12px',
-            padding: '0.35rem 0.6rem',
+            padding: '0.4rem 0.65rem',
             textAlign: 'center',
-            marginBottom: '0.25rem',
-            flexShrink: 0,
+            marginBottom: '0.35rem',
             animation: 'fadeIn 0.2s ease'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.05rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.1rem' }}>
               {answerResult.isCorrect ? (
                 <>
-                  <CheckCircle2 color="#38B2AC" size={16} />
-                  <strong style={{ color: '#2C7A7B', fontSize: '0.9rem' }}>CORRECT! +{answerResult.points} pts</strong>
+                  <CheckCircle2 color="#38B2AC" size={18} />
+                  <strong style={{ color: '#2C7A7B', fontSize: '0.95rem' }}>CORRECT! +{answerResult.points} pts</strong>
                 </>
               ) : (
                 <>
-                  <XCircle color="#E53E3E" size={16} />
-                  <strong style={{ color: '#C53030', fontSize: '0.9rem' }}>INCORRECT</strong>
+                  <XCircle color="#E53E3E" size={18} />
+                  <strong style={{ color: '#C53030', fontSize: '0.95rem' }}>INCORRECT</strong>
                 </>
               )}
             </div>
-            <p style={{ color: '#4A5568', fontSize: '0.76rem', margin: 0, lineHeight: '1.2' }}>
+            <p style={{ color: '#4A5568', fontSize: '0.78rem', margin: 0 }}>
               {answerResult.explanation}
             </p>
           </div>
         )}
 
         {/* Content Area (Round 1 Images vs Round 2 Logo vs Round 3 Emoji) */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.1rem' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
 
-          {/* ROUND 1: Two Images Side by Side (Fills remaining height smoothly) */}
+          {/* ROUND 1: Two Images Side by Side */}
           {currentQ.round === 1 && (
-            <div key={`r1_${currentQ.id}`} style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div key={`r1_${currentQ.id}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', height: '180px', marginTop: 'auto' }}>
               <button
                 key={`btn_a_${currentQ.id}`}
                 disabled={isAnswerSubmitted}
                 onClick={() => submitAnswer(currentQ.isRealOnLeft ? 'real' : 'ai')}
                 style={{
-                  width: '100%',
-                  height: '100%',
                   border: selectedOption === (currentQ.isRealOnLeft ? 'real' : 'ai') ? '4px solid #6C5CE7' : '2px solid #E2E8F0',
-                  borderRadius: '14px',
+                  borderRadius: '16px',
                   overflow: 'hidden',
                   position: 'relative',
                   padding: 0,
@@ -709,7 +708,7 @@ export default function PlayerView() {
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
                 />
-                <span style={{ position: 'absolute', bottom: '8px', left: '8px', background: 'rgba(0,0,0,0.65)', color: '#FFF', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
+                <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.6)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
                   IMAGE A
                 </span>
               </button>
@@ -719,10 +718,8 @@ export default function PlayerView() {
                 disabled={isAnswerSubmitted}
                 onClick={() => submitAnswer(currentQ.isRealOnLeft ? 'ai' : 'real')}
                 style={{
-                  width: '100%',
-                  height: '100%',
                   border: selectedOption === (currentQ.isRealOnLeft ? 'ai' : 'real') ? '4px solid #6C5CE7' : '2px solid #E2E8F0',
-                  borderRadius: '14px',
+                  borderRadius: '16px',
                   overflow: 'hidden',
                   position: 'relative',
                   padding: 0,
@@ -738,7 +735,7 @@ export default function PlayerView() {
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
                 />
-                <span style={{ position: 'absolute', bottom: '8px', left: '8px', background: 'rgba(0,0,0,0.65)', color: '#FFF', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
+                <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.6)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
                   IMAGE B
                 </span>
               </button>
@@ -747,17 +744,15 @@ export default function PlayerView() {
 
           {/* ROUND 2: Brand Logo Display (Zero-scroll compact centered layout) */}
           {currentQ.round === 2 && (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.2rem 0' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0' }}>
               <div style={{
-                width: '100%',
-                maxWidth: '210px',
-                height: '100%',
-                maxHeight: '130px',
+                width: '140px',
+                height: '140px',
                 margin: '0 auto',
-                padding: '0.5rem',
+                padding: '0.65rem',
                 background: '#FFFFFF',
-                borderRadius: '16px',
-                boxShadow: '0 6px 18px rgba(108, 92, 231, 0.12), 0 2px 6px rgba(0,0,0,0.04)',
+                borderRadius: '20px',
+                boxShadow: '0 8px 20px rgba(108, 92, 231, 0.14), 0 2px 8px rgba(0,0,0,0.06)',
                 border: '2px solid #EEF2FF',
                 display: 'flex',
                 alignItems: 'center',
@@ -773,10 +768,10 @@ export default function PlayerView() {
             </div>
           )}
 
-          {/* ROUND 3: Emoji Clue Display (Single centered responsive display) */}
+          {/* ROUND 3: Emoji Clue Display (Single centered 3.5rem display) */}
           {currentQ.round === 3 && (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.2rem 0' }}>
-              <span style={{ fontSize: 'clamp(3rem, 10vw, 3.8rem)', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))', lineHeight: 1 }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0' }}>
+              <span style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}>
                 {currentQ.prompt_text}
               </span>
             </div>
@@ -784,7 +779,7 @@ export default function PlayerView() {
 
           {/* Answer Options Grid (Round 2 & 3: 4 Choice Buttons) */}
           {currentQ.round !== 1 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', flexShrink: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: 'auto' }}>
               {currentQ.options.map((optionText, idx) => {
                 const colors = ['#FF7675', '#0984E3', '#FDCB6E', '#00B894'];
                 const optionColor = colors[idx % 4];
@@ -799,18 +794,13 @@ export default function PlayerView() {
                     style={{
                       backgroundColor: optionColor,
                       color: idx === 2 ? '#2D3436' : '#FFFFFF',
-                      fontSize: 'clamp(0.8rem, 3.5vw, 0.92rem)',
+                      fontSize: '0.9rem',
                       fontWeight: 800,
                       padding: '0.45rem 0.3rem',
-                      minHeight: '48px',
+                      minHeight: '44px',
                       borderRadius: '12px',
                       opacity: isAnswerSubmitted && !isSelected ? 0.4 : 1,
-                      outline: isSelected ? '4px solid #2D3436' : 'none',
-                      touchAction: 'manipulation',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      lineHeight: 1.2
+                      outline: isSelected ? '4px solid #2D3436' : 'none'
                     }}
                   >
                     {optionText}
@@ -939,13 +929,11 @@ const playerContainerStyle = {
 };
 
 const gameplayContainerStyle = {
-  height: '100vh',
-  height: '100dvh',
-  maxHeight: '100dvh',
+  minHeight: '100vh',
+  maxHeight: '100vh',
   display: 'flex',
   flexDirection: 'column',
-  padding: 'max(0.4rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right)) max(0.4rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left))',
+  padding: 'max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-right))',
   background: '#FFFFFF',
-  overflow: 'hidden',
-  boxSizing: 'border-box'
+  overflow: 'hidden'
 };
