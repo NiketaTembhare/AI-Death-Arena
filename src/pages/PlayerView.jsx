@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
+import { syncServerClock, getServerTimeMs, getClockOffsetMs } from '../lib/serverClock';
 import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
@@ -37,14 +38,18 @@ export default function PlayerView() {
   // Synchronized Timers & Countdown
   const [countdownNum, setCountdownNum] = useState(null);
   const [timeLeftSec, setTimeLeftSec] = useState(15);
-  const questionStartTimeRef = useRef(Date.now());
+  const questionStartTimeRef = useRef(getServerTimeMs());
   const timerIntervalRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const lastBeepedRef = useRef(null);
   const lastCountdownRoundRef = useRef(null);
 
-  // 1. Initialize Device Token
+  // 1. Initialize Device Token & Server Clock Sync
   useEffect(() => {
+    syncServerClock().then((offset) => {
+      console.log('Device clock vs server clock offset (ms):', offset);
+    });
+
     let token = localStorage.getItem('arena_device_token');
     if (!token) {
       token = 'dev_' + Math.random().toString(36).substring(2, 12);
@@ -195,7 +200,7 @@ export default function PlayerView() {
     const targetMs = new Date(startedAtIso).getTime();
 
     const updateStep = () => {
-      const remainingMs = targetMs - Date.now();
+      const remainingMs = targetMs - getServerTimeMs();
 
       let currentStep = null;
       if (remainingMs > 3200) {
@@ -228,7 +233,7 @@ export default function PlayerView() {
 
     updateStep();
 
-    if (targetMs - Date.now() > -200) {
+    if (targetMs - getServerTimeMs() > -200) {
       countdownIntervalRef.current = setInterval(updateStep, 40);
     }
   };
@@ -293,14 +298,14 @@ export default function PlayerView() {
 
   const startPerQuestionTimer = (durationSec = 15) => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    questionStartTimeRef.current = Date.now();
-    const targetEndMs = Date.now() + durationSec * 1000;
+    questionStartTimeRef.current = getServerTimeMs();
+    const targetEndMs = getServerTimeMs() + durationSec * 1000;
     let lastUrgencySec = null;
 
     setTimeLeftSec(durationSec);
 
     timerIntervalRef.current = setInterval(() => {
-      const remainingMs = targetEndMs - Date.now();
+      const remainingMs = targetEndMs - getServerTimeMs();
       const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
 
       setTimeLeftSec(remainingSec);
@@ -331,7 +336,7 @@ export default function PlayerView() {
     setSelectedOption(chosenOption);
 
     const currentQ = questions[currentQIndex];
-    const responseTimeMs = Date.now() - questionStartTimeRef.current;
+    const responseTimeMs = getServerTimeMs() - questionStartTimeRef.current;
 
     let isCorrect = false;
     if (currentQ.round === 1) {

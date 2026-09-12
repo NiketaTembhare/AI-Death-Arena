@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
+import { syncServerClock, getServerTimeMs, getClockOffsetMs } from '../lib/serverClock';
 import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
@@ -39,7 +40,7 @@ export default function MatchConsoleView() {
     const targetMs = new Date(startedAtIso).getTime();
 
     const updateStep = () => {
-      const remainingMs = targetMs - Date.now();
+      const remainingMs = targetMs - getServerTimeMs();
 
       let currentStep = null;
       if (remainingMs > 3200) {
@@ -72,7 +73,7 @@ export default function MatchConsoleView() {
 
     updateStep();
 
-    if (targetMs - Date.now() > -200) {
+    if (targetMs - getServerTimeMs() > -200) {
       countdownIntervalRef.current = setInterval(updateStep, 40);
     }
   };
@@ -108,8 +109,12 @@ export default function MatchConsoleView() {
     matchRef.current = match;
   }, [match]);
 
-  // 1. Fetch current active match on mount
+  // 1. Fetch current active match on mount & sync server clock
   const fetchActiveMatch = async () => {
+    syncServerClock().then((offset) => {
+      console.log('Device clock vs server clock offset (ms):', offset);
+    });
+
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -586,7 +591,7 @@ export default function MatchConsoleView() {
       };
 
       if (isStarting) {
-        const targetTime = new Date(Date.now() + 5400).toISOString();
+        const targetTime = new Date(getServerTimeMs() + 5400).toISOString();
         updatePayload.round_started_at = targetTime;
       }
 
