@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <defs>
+    <radialGradient id="siriOrb" cx="40%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#FF5E3A"/>
+      <stop offset="35%" stop-color="#FF2D55"/>
+      <stop offset="70%" stop-color="#5856D6"/>
+      <stop offset="100%" stop-color="#007AFF"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="48" fill="url(#siriOrb)"/>
+  <path d="M30 64 Q47 40 64 64 T98 64" fill="none" stroke="#FFFFFF" stroke-width="4" opacity="0.8" stroke-linecap="round"/>
+  <path d="M34 64 Q49 84 64 64 T94 64" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.6" stroke-linecap="round"/>
+</svg>

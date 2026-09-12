@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <defs>
+    <linearGradient id="llamaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0064E0"/>
+      <stop offset="50%" stop-color="#0084FF"/>
+      <stop offset="100%" stop-color="#00D2FF"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#llamaGrad)" d="M42.2 38.6c-7.8 0-14.8 4.2-18.4 10.9-4.8 8.9-3.2 20.1 3.9 27.2l20.4 20.4c4.7 4.7 12.3 4.7 17 0l20.4-20.4c7.1-7.1 8.7-18.3 3.9-27.2-3.6-6.7-10.6-10.9-18.4-10.9H42.2zm0 12h28.6c3.1 0 5.9 1.7 7.3 4.4 1.9 3.6 1.3 8.1-1.6 11L56.1 86.4c-1.2 1.2-3.1 1.2-4.3 0L31.5 66c-2.9-2.9-3.5-7.4-1.6-11 1.4-2.7 4.2-4.4 7.3-4.4z"/>
+  <circle cx="64" cy="64" r="48" stroke="url(#llamaGrad)" stroke-width="6" fill="none" opacity="0.3"/>
+</svg>
