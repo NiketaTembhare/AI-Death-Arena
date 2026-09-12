@@ -641,7 +641,7 @@ export default function PlayerView() {
         </header>
 
         {/* Question Title & Prompt */}
-        <div style={{ textAlign: 'center', marginBottom: '0.25rem', marginTop: currentQ.round === 1 ? '1.25rem' : '0.55rem', flexShrink: 0 }}>
+        <div style={{ textAlign: 'center', marginBottom: '0.25rem', marginTop: currentQ.round === 1 ? '1.25rem' : '1rem', flexShrink: 0 }}>
           <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
             ROUND {currentQ.round} — {currentQ.round === 1 ? 'REAL OR FAKE?' : currentQ.round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
           </span>
@@ -682,7 +682,7 @@ export default function PlayerView() {
         )}
 
         {/* Content Area (Round 1 Images vs Round 2 Logo vs Round 3 Emoji) */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: currentQ.round === 1 ? 'space-between' : 'flex-start', gap: '0.35rem', marginBottom: '0.1rem' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: currentQ.round === 1 ? 'space-between' : 'space-evenly', gap: '0.35rem', marginBottom: '0.1rem' }}>
 
           {/* ROUND 1: Two Images Side by Side (Vertically Centered) */}
           {currentQ.round === 1 && (
