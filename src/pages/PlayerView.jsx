@@ -692,7 +692,7 @@ export default function PlayerView() {
           {/* ROUND 2: Brand Logo Display */}
           {currentQ.round === 2 && (
             <div style={{ textAlign: 'center', margin: '0.25rem 0' }}>
-              <div style={{ width: '90px', height: '90px', margin: '0 auto', padding: '0.75rem', background: '#FFFFFF', borderRadius: '20px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: '140px', height: '140px', margin: '0 auto', padding: '0.75rem', background: '#FFFFFF', borderRadius: '20px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img
                   src={currentQ.logo_url}
                   alt="Brand Logo"
