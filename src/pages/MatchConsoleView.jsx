@@ -32,6 +32,11 @@ export default function MatchConsoleView() {
     return audioManager.subscribe((muted) => setIsMuted(muted));
   }, []);
 
+  const matchRef = useRef(match);
+  useEffect(() => {
+    matchRef.current = match;
+  }, [match]);
+
   // 1. Fetch current active match on mount
   const fetchActiveMatch = async () => {
     setLoading(true);
@@ -90,11 +95,20 @@ export default function MatchConsoleView() {
 
     const aggregated = playerRows.map((p) => {
       const pAnswers = answers.filter((a) => a.player_id === p.id);
-      const totalScore = pAnswers.reduce((sum, a) => sum + (a.points_earned || 0), 0);
+
+      const r1Answers = pAnswers.filter((a) => Number(a.round) === 1);
+      const r2Answers = pAnswers.filter((a) => Number(a.round) === 2);
+      const r3Answers = pAnswers.filter((a) => Number(a.round) === 3);
+
+      const r1Score = r1Answers.reduce((sum, a) => sum + (a.points_earned || 0), 0);
+      const r2Score = r2Answers.reduce((sum, a) => sum + (a.points_earned || 0), 0);
+      const r3Score = r3Answers.reduce((sum, a) => sum + (a.points_earned || 0), 0);
+      const totalScore = r1Score + r2Score + r3Score;
+
       const correctCount = pAnswers.filter((a) => a.is_correct === true).length;
       
-      const roundAnswersCount = currentRound 
-        ? pAnswers.filter((a) => a.round === Number(currentRound)).length 
+      const roundAnswersCount = (currentRound && Number(currentRound) > 0)
+        ? pAnswers.filter((a) => Number(a.round) === Number(currentRound)).length 
         : 0;
 
       if (!p.has_left && roundAnswersCount >= 5) {
@@ -107,6 +121,9 @@ export default function MatchConsoleView() {
         display_name: p.display_name,
         device_token: p.device_token,
         has_left: p.has_left,
+        r1_score: r1Score,
+        r2_score: r2Score,
+        r3_score: r3Score,
         total_score: totalScore,
         correct_count: correctCount,
         total_answers: pAnswers.length,
@@ -146,7 +163,7 @@ export default function MatchConsoleView() {
     const playerChannel = supabase
       .channel(`players_${match.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'match_players', filter: `match_id=eq.${match.id}` }, () => {
-        fetchLiveLeaderboardAndProgress(match.id, match.current_round);
+        fetchLiveLeaderboardAndProgress(match.id, matchRef.current?.current_round);
       })
       .subscribe();
 
@@ -154,7 +171,7 @@ export default function MatchConsoleView() {
     const answersChannel = supabase
       .channel(`answers_${match.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'match_answers', filter: `match_id=eq.${match.id}` }, () => {
-        fetchLiveLeaderboardAndProgress(match.id, match.current_round);
+        fetchLiveLeaderboardAndProgress(match.id, matchRef.current?.current_round);
       })
       .subscribe();
 
@@ -504,82 +521,137 @@ export default function MatchConsoleView() {
           {/* Live Re-sorting Leaderboard */}
           <div className="card-console">
             <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#A29BFE' }}>LIVE ARENA STANDINGS</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {leaderboard.length === 0 ? (
-                <p style={{ color: '#A29BFE', textAlign: 'center', padding: '2rem' }}>Waiting for player scores...</p>
-              ) : (
-                leaderboard.map((player, idx) => {
-                  const avatar = getPlayerAvatar(player.display_name);
-                  const isFirst = idx === 0;
-                  return (
-                    <div
-                      key={player.player_id}
-                      style={{
-                        background: isFirst ? 'linear-gradient(90deg, #1E1A3C, #322A63)' : '#161334',
-                        border: isFirst ? '2px solid #FDCB6E' : '1px solid #2D2856',
-                        borderRadius: '16px',
-                        padding: '1rem 1.5rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        transition: 'transform 0.3s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <span style={{
-                          fontSize: '1.5rem',
-                          fontWeight: 900,
-                          width: '36px',
-                          color: isFirst ? '#FDCB6E' : '#A29BFE'
-                        }}>
-                          #{idx + 1}
-                        </span>
+            
+            {leaderboard.length === 0 ? (
+              <p style={{ color: '#A29BFE', textAlign: 'center', padding: '2rem' }}>Waiting for player scores...</p>
+            ) : (
+              <div style={{ width: '100%', overflowX: 'auto' }}>
+                <div style={{ minWidth: '680px' }}>
+                  {/* Table Column Headers */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '70px 2fr 1fr 1fr 1fr 1.2fr 40px',
+                    gap: '0.75rem',
+                    padding: '0.5rem 1.25rem',
+                    marginBottom: '0.5rem',
+                    color: '#A29BFE',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase',
+                    borderBottom: '1px solid #2D2856'
+                  }}>
+                    <div>RANK</div>
+                    <div>PLAYER</div>
+                    <div style={{ textAlign: 'center' }}>ROUND 1</div>
+                    <div style={{ textAlign: 'center' }}>ROUND 2</div>
+                    <div style={{ textAlign: 'center' }}>ROUND 3</div>
+                    <div style={{ textAlign: 'right' }}>TOTAL SCORE</div>
+                    <div></div>
+                  </div>
 
-                        <div style={{ position: 'relative' }}>
-                          {isFirst && (
-                            <Crown size={22} color="#FDCB6E" style={{ position: 'absolute', top: '-14px', left: '12px' }} />
-                          )}
-                          <div className="avatar-badge" style={{ background: avatar.bgColor }}>
-                            {avatar.emoji}
-                          </div>
-                        </div>
+                  {/* Animated Rows Container */}
+                  <div style={{
+                    position: 'relative',
+                    height: `${leaderboard.length * 72}px`,
+                    transition: 'height 300ms ease'
+                  }}>
+                    {leaderboard.map((player, idx) => {
+                      const avatar = getPlayerAvatar(player.display_name);
+                      const isFirst = idx === 0;
 
-                        <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#FFFFFF' }}>
-                          {player.display_name}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                        <span style={{ color: '#00B894', fontWeight: 700 }}>
-                          {player.correct_count} / {player.total_answers} Correct
-                        </span>
-                        <span style={{ fontSize: '1.5rem', fontWeight: 900, color: '#FDCB6E' }}>
-                          {player.total_score} pts
-                        </span>
-                        <button
-                          onClick={() => handleRemovePlayer(player.player_id, player.display_name)}
-                          title="Remove player from match"
+                      return (
+                        <div
+                          key={player.player_id}
                           style={{
-                            background: 'rgba(255, 118, 117, 0.15)',
-                            border: '1px solid #FF7675',
-                            color: '#FF7675',
-                            borderRadius: '50%',
-                            width: '28px',
-                            height: '28px',
-                            display: 'flex',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '60px',
+                            transform: `translateY(${idx * 72}px)`,
+                            transition: 'transform 450ms cubic-bezier(0.2, 0, 0, 1), background-color 300ms ease, border-color 300ms ease',
+                            background: isFirst ? 'linear-gradient(90deg, #1E1A3C, #322A63)' : '#161334',
+                            border: isFirst ? '2px solid #FDCB6E' : '1px solid #2D2856',
+                            borderRadius: '16px',
+                            padding: '0 1.25rem',
+                            display: 'grid',
+                            gridTemplateColumns: '70px 2fr 1fr 1fr 1fr 1.2fr 40px',
+                            gap: '0.75rem',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer'
+                            boxShadow: isFirst ? '0 4px 20px rgba(253, 203, 110, 0.2)' : 'none'
                           }}
                         >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                          {/* RANK */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            {isFirst && <Crown size={18} color="#FDCB6E" />}
+                            <span style={{
+                              fontSize: '1.25rem',
+                              fontWeight: 900,
+                              color: isFirst ? '#FDCB6E' : idx === 1 ? '#DFE6E9' : idx === 2 ? '#E17055' : '#A29BFE'
+                            }}>
+                              #{idx + 1}
+                            </span>
+                          </div>
+
+                          {/* PLAYER */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                            <div className="avatar-badge" style={{ background: avatar.bgColor, width: '36px', height: '36px', fontSize: '1.2rem', flexShrink: 0 }}>
+                              {avatar.emoji}
+                            </div>
+                            <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {player.display_name}
+                            </span>
+                          </div>
+
+                          {/* ROUND 1 */}
+                          <div style={{ textAlign: 'center', fontWeight: 700, color: player.r1_score > 0 ? '#00B894' : '#636E72', fontSize: '1rem' }}>
+                            {player.r1_score > 0 ? `+${player.r1_score}` : '—'}
+                          </div>
+
+                          {/* ROUND 2 */}
+                          <div style={{ textAlign: 'center', fontWeight: 700, color: player.r2_score > 0 ? '#00B894' : '#636E72', fontSize: '1rem' }}>
+                            {player.r2_score > 0 ? `+${player.r2_score}` : '—'}
+                          </div>
+
+                          {/* ROUND 3 */}
+                          <div style={{ textAlign: 'center', fontWeight: 700, color: player.r3_score > 0 ? '#00B894' : '#636E72', fontSize: '1rem' }}>
+                            {player.r3_score > 0 ? `+${player.r3_score}` : '—'}
+                          </div>
+
+                          {/* TOTAL */}
+                          <div style={{ textAlign: 'right', fontSize: '1.3rem', fontWeight: 900, color: '#FDCB6E' }}>
+                            {player.total_score} <span style={{ fontSize: '0.85rem', color: '#A29BFE' }}>pts</span>
+                          </div>
+
+                          {/* REMOVE ACTION */}
+                          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                              onClick={() => handleRemovePlayer(player.player_id, player.display_name)}
+                              title="Remove player from match"
+                              style={{
+                                background: 'rgba(255, 118, 117, 0.15)',
+                                border: '1px solid #FF7675',
+                                color: '#FF7675',
+                                borderRadius: '50%',
+                                width: '26px',
+                                height: '26px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -645,52 +717,117 @@ export default function MatchConsoleView() {
           {/* Full Final Standings List */}
           <div className="card-console">
             <h3 style={{ fontSize: '1.5rem', marginBottom: '1.25rem', color: '#A29BFE' }}>FULL FINAL STANDINGS</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {leaderboard.map((player, idx) => {
-                const avatar = getPlayerAvatar(player.display_name);
-                const isTop3 = idx < 3;
-                return (
-                  <div
-                    key={player.player_id}
-                    style={{
-                      background: isTop3 ? 'linear-gradient(90deg, #1E1A3C, #322A63)' : '#161334',
-                      border: isTop3 ? '2px solid #FDCB6E' : '1px solid #2D2856',
-                      borderRadius: '16px',
-                      padding: '1rem 1.5rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <span style={{
-                        fontSize: '1.4rem',
-                        fontWeight: 900,
-                        width: '36px',
-                        color: idx === 0 ? '#FDCB6E' : idx === 1 ? '#DFE6E9' : idx === 2 ? '#E17055' : '#A29BFE'
-                      }}>
-                        #{idx + 1}
-                      </span>
-                      <div className="avatar-badge" style={{ background: avatar.bgColor }}>
-                        {avatar.emoji}
-                      </div>
-                      <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#FFFFFF' }}>
-                        {player.display_name}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                      <span style={{ color: '#00B894', fontWeight: 700 }}>
-                        {player.correct_count} / {player.total_answers} Correct
-                      </span>
-                      <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#FDCB6E' }}>
-                        {player.total_score} pts
-                      </span>
-                    </div>
+            
+            {leaderboard.length === 0 ? (
+              <p style={{ color: '#A29BFE', textAlign: 'center', padding: '2rem' }}>No player standings available.</p>
+            ) : (
+              <div style={{ width: '100%', overflowX: 'auto' }}>
+                <div style={{ minWidth: '680px' }}>
+                  {/* Table Column Headers */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '70px 2fr 1fr 1fr 1fr 1.2fr 40px',
+                    gap: '0.75rem',
+                    padding: '0.5rem 1.25rem',
+                    marginBottom: '0.5rem',
+                    color: '#A29BFE',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase',
+                    borderBottom: '1px solid #2D2856'
+                  }}>
+                    <div>RANK</div>
+                    <div>PLAYER</div>
+                    <div style={{ textAlign: 'center' }}>ROUND 1</div>
+                    <div style={{ textAlign: 'center' }}>ROUND 2</div>
+                    <div style={{ textAlign: 'center' }}>ROUND 3</div>
+                    <div style={{ textAlign: 'right' }}>TOTAL SCORE</div>
+                    <div></div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Animated Rows Container */}
+                  <div style={{
+                    position: 'relative',
+                    height: `${leaderboard.length * 72}px`,
+                    transition: 'height 300ms ease'
+                  }}>
+                    {leaderboard.map((player, idx) => {
+                      const avatar = getPlayerAvatar(player.display_name);
+                      const isFirst = idx === 0;
+
+                      return (
+                        <div
+                          key={player.player_id}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '60px',
+                            transform: `translateY(${idx * 72}px)`,
+                            transition: 'transform 450ms cubic-bezier(0.2, 0, 0, 1), background-color 300ms ease, border-color 300ms ease',
+                            background: isFirst ? 'linear-gradient(90deg, #1E1A3C, #322A63)' : '#161334',
+                            border: isFirst ? '2px solid #FDCB6E' : '1px solid #2D2856',
+                            borderRadius: '16px',
+                            padding: '0 1.25rem',
+                            display: 'grid',
+                            gridTemplateColumns: '70px 2fr 1fr 1fr 1fr 1.2fr 40px',
+                            gap: '0.75rem',
+                            alignItems: 'center',
+                            boxShadow: isFirst ? '0 4px 20px rgba(253, 203, 110, 0.2)' : 'none'
+                          }}
+                        >
+                          {/* RANK */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            {isFirst && <Crown size={18} color="#FDCB6E" />}
+                            <span style={{
+                              fontSize: '1.25rem',
+                              fontWeight: 900,
+                              color: isFirst ? '#FDCB6E' : idx === 1 ? '#DFE6E9' : idx === 2 ? '#E17055' : '#A29BFE'
+                            }}>
+                              #{idx + 1}
+                            </span>
+                          </div>
+
+                          {/* PLAYER */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                            <div className="avatar-badge" style={{ background: avatar.bgColor, width: '36px', height: '36px', fontSize: '1.2rem', flexShrink: 0 }}>
+                              {avatar.emoji}
+                            </div>
+                            <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {player.display_name}
+                            </span>
+                          </div>
+
+                          {/* ROUND 1 */}
+                          <div style={{ textAlign: 'center', fontWeight: 700, color: player.r1_score > 0 ? '#00B894' : '#636E72', fontSize: '1rem' }}>
+                            {player.r1_score > 0 ? `+${player.r1_score}` : '—'}
+                          </div>
+
+                          {/* ROUND 2 */}
+                          <div style={{ textAlign: 'center', fontWeight: 700, color: player.r2_score > 0 ? '#00B894' : '#636E72', fontSize: '1rem' }}>
+                            {player.r2_score > 0 ? `+${player.r2_score}` : '—'}
+                          </div>
+
+                          {/* ROUND 3 */}
+                          <div style={{ textAlign: 'center', fontWeight: 700, color: player.r3_score > 0 ? '#00B894' : '#636E72', fontSize: '1rem' }}>
+                            {player.r3_score > 0 ? `+${player.r3_score}` : '—'}
+                          </div>
+
+                          {/* TOTAL */}
+                          <div style={{ textAlign: 'right', fontSize: '1.3rem', fontWeight: 900, color: '#FDCB6E' }}>
+                            {player.total_score} <span style={{ fontSize: '0.85rem', color: '#A29BFE' }}>pts</span>
+                          </div>
+
+                          <div></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
