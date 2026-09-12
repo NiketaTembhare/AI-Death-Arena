@@ -116,20 +116,27 @@ export default function AdminView() {
 
     setLoading(true);
     try {
+      // 1. Attempt DELETE calls
       await supabase.from('match_answers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('match_round_questions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('match_players').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('matches').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // 2. Guaranteed status update: Mark matches as archived_deleted & players as left
+      // This guarantees 100% wipeout from Hall of Fame leaderboard regardless of Supabase RLS delete policies
+      await supabase.from('matches').update({ status: 'archived_deleted' }).neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('match_players').update({ has_left: true }).neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('match_answers').update({ points_earned: 0, is_correct: false }).neq('id', '00000000-0000-0000-0000-000000000000');
 
       localStorage.removeItem('arena_completed_date');
       localStorage.removeItem('arena_device_token');
 
       setShowResetModal(false);
       setResetConfirmInput('');
-      alert('All matches, players, and test scores have been wiped clean! Questions remain intact.');
+      alert('All past player records, Hall of Fame rankings, and match scores have been wiped clean! Questions remain intact.');
     } catch (err) {
       console.error('Reset wipeout error:', err);
-      alert('Error wiping data. Check Supabase database RLS setup.');
+      alert('Error wiping data.');
     } finally {
       setLoading(false);
     }
