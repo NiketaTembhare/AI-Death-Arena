@@ -42,13 +42,13 @@ export default function MatchConsoleView() {
       const remainingMs = targetMs - Date.now();
 
       let currentStep = null;
-      if (remainingMs > 2200) {
+      if (remainingMs > 3200) {
         currentStep = 3;
-      } else if (remainingMs > 1200) {
+      } else if (remainingMs > 2000) {
         currentStep = 2;
-      } else if (remainingMs > 200) {
+      } else if (remainingMs > 800) {
         currentStep = 1;
-      } else if (remainingMs > -600) {
+      } else if (remainingMs > -200) {
         currentStep = 0; // GO!
       } else {
         currentStep = null; // Completed
@@ -72,7 +72,7 @@ export default function MatchConsoleView() {
 
     updateStep();
 
-    if (targetMs - Date.now() > -600) {
+    if (targetMs - Date.now() > -200) {
       countdownIntervalRef.current = setInterval(updateStep, 40);
     }
   };
@@ -586,7 +586,7 @@ export default function MatchConsoleView() {
       };
 
       if (isStarting) {
-        const targetTime = new Date(Date.now() + 4200).toISOString();
+        const targetTime = new Date(Date.now() + 5400).toISOString();
         updatePayload.round_started_at = targetTime;
       }
 

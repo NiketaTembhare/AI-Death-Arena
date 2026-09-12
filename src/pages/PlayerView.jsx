@@ -198,13 +198,13 @@ export default function PlayerView() {
       const remainingMs = targetMs - Date.now();
 
       let currentStep = null;
-      if (remainingMs > 2200) {
+      if (remainingMs > 3200) {
         currentStep = 3;
-      } else if (remainingMs > 1200) {
+      } else if (remainingMs > 2000) {
         currentStep = 2;
-      } else if (remainingMs > 200) {
+      } else if (remainingMs > 800) {
         currentStep = 1;
-      } else if (remainingMs > -600) {
+      } else if (remainingMs > -200) {
         currentStep = 0; // GO!
       } else {
         currentStep = null; // Completed / Past
@@ -228,7 +228,7 @@ export default function PlayerView() {
 
     updateStep();
 
-    if (targetMs - Date.now() > -600) {
+    if (targetMs - Date.now() > -200) {
       countdownIntervalRef.current = setInterval(updateStep, 40);
     }
   };
