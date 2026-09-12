@@ -691,7 +691,45 @@ export default function PlayerView() {
     );
   }
 
-  // 4. AFTER ROUND 3 / RESULTS WAIT
+  // 4. INTERIM ROUND RESULTS WAIT SCREEN (Round 1 & Round 2 Results)
+  if (match?.status === 'round1_results' || match?.status === 'round2_results') {
+    const roundNum = match.status === 'round1_results' ? 1 : 2;
+    const avatar = getPlayerAvatar(player.display_name);
+
+    return (
+      <div style={playerContainerStyle}>
+        <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
+          <div className="avatar-badge" style={{ background: avatar.bgColor, width: '64px', height: '64px', fontSize: '2rem', margin: '0 auto 0.75rem' }}>
+            {avatar.emoji}
+          </div>
+          <h2 style={{ fontSize: '1.6rem', color: '#2D3436' }}>ROUND {roundNum} COMPLETE!</h2>
+          <span style={{ display: 'inline-block', background: '#E0E7FF', color: '#4338CA', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 700, marginTop: '0.4rem', marginBottom: '1.5rem' }}>
+            {player.display_name}
+          </span>
+
+          <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '20px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>
+            <span style={{ fontSize: '0.85rem', color: '#636E72', fontWeight: 700, display: 'block' }}>YOUR CURRENT SCORE</span>
+            <strong style={{ fontSize: '2.5rem', color: '#6C5CE7' }}>{playerScore} pts</strong>
+            {playerRank && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <span style={{ background: '#FEFCBF', color: '#744210', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 800, fontSize: '0.9rem' }}>
+                  CURRENT RANK #{playerRank}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div style={{ background: '#EEF2FF', padding: '1rem', borderRadius: '16px', border: '1px solid #C7D2FE' }}>
+            <p style={{ color: '#4338CA', fontWeight: 600, fontSize: '0.9rem' }}>
+              Look at the arena projector display! Waiting for host to start Round {roundNum + 1}...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. AFTER ROUND 3 / FINAL MATCH COMPLETE SCREEN
   return (
     <div style={playerContainerStyle}>
       <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>

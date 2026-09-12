@@ -10,6 +10,7 @@ export default function MatchConsoleView() {
   const [loading, setLoading] = useState(true);
   const [players, setPlayers] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [answeredCount, setAnsweredCount] = useState(0);
   const [isMuted, setIsMuted] = useState(audioManager.isMuted);
   const previousStatusRef = useRef(null);
 
@@ -55,6 +56,7 @@ export default function MatchConsoleView() {
     // Fetch initial player roster & leaderboard
     fetchRoster(match.id);
     fetchLeaderboard(match.id);
+    fetchAnswerProgress(match.id, match.current_round);
 
     // Subscribe to match status changes
     const matchChannel = supabase
@@ -62,6 +64,7 @@ export default function MatchConsoleView() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` }, (payload) => {
         const newMatch = payload.new;
         setMatch(newMatch);
+        fetchAnswerProgress(newMatch.id, newMatch.current_round);
 
         // Sound cues trigger on DB status changes
         if (previousStatusRef.current !== newMatch.status) {
@@ -80,11 +83,12 @@ export default function MatchConsoleView() {
       })
       .subscribe();
 
-    // Subscribe to submitted answers for live leaderboard updates
+    // Subscribe to submitted answers for live leaderboard updates & host progress counter
     const answersChannel = supabase
       .channel(`answers_${match.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'match_answers', filter: `match_id=eq.${match.id}` }, () => {
         fetchLeaderboard(match.id);
+        fetchAnswerProgress(match.id, match.current_round);
       })
       .subscribe();
 
@@ -111,6 +115,20 @@ export default function MatchConsoleView() {
       .eq('match_id', matchId)
       .order('total_score', { ascending: false });
     if (data) setLeaderboard(data);
+  };
+
+  const fetchAnswerProgress = async (matchId, roundNum) => {
+    if (!roundNum) return;
+    const { data } = await supabase
+      .from('match_answers')
+      .select('player_id')
+      .eq('match_id', matchId)
+      .eq('round', roundNum);
+
+    if (data) {
+      const uniquePlayers = new Set(data.map((row) => row.player_id));
+      setAnsweredCount(uniquePlayers.size);
+    }
   };
 
   const handleStatusSoundCue = (status) => {
@@ -390,6 +408,16 @@ export default function MatchConsoleView() {
               </h2>
             </div>
 
+            {/* Answered Progress Indicator for Host */}
+            {(match.status === 'round1' || match.status === 'round2' || match.status === 'round3') && (
+              <div style={{ background: '#161334', border: '1px solid #00B894', padding: '0.5rem 1.25rem', borderRadius: '16px', textAlign: 'center' }}>
+                <span style={{ color: '#A29BFE', fontSize: '0.8rem', fontWeight: 700, display: 'block' }}>ANSWERED PROGRESS</span>
+                <strong style={{ fontSize: '1.25rem', color: '#00B894' }}>
+                  {answeredCount} / {players.length} Players Done
+                </strong>
+              </div>
+            )}
+
             {/* Sequential Round Progression Controls */}
             <div style={{ display: 'flex', gap: '1rem' }}>
               {match.status === 'round1' && (
@@ -541,6 +569,57 @@ export default function MatchConsoleView() {
             <button onClick={handleStartNewMatch} className="btn btn-green" style={{ fontSize: '1.3rem', padding: '1rem 2.5rem' }}>
               <RotateCcw size={24} /> START NEW MATCH FOR NEXT GROUP
             </button>
+          </div>
+
+          {/* Full Final Standings List */}
+          <div className="card-console">
+            <h3 style={{ fontSize: '1.5rem', marginBottom: '1.25rem', color: '#A29BFE' }}>FULL FINAL STANDINGS</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {leaderboard.map((player, idx) => {
+                const avatar = getPlayerAvatar(player.display_name);
+                const isTop3 = idx < 3;
+                return (
+                  <div
+                    key={player.player_id}
+                    style={{
+                      background: isTop3 ? 'linear-gradient(90deg, #1E1A3C, #322A63)' : '#161334',
+                      border: isTop3 ? '2px solid #FDCB6E' : '1px solid #2D2856',
+                      borderRadius: '16px',
+                      padding: '1rem 1.5rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      <span style={{
+                        fontSize: '1.4rem',
+                        fontWeight: 900,
+                        width: '36px',
+                        color: idx === 0 ? '#FDCB6E' : idx === 1 ? '#DFE6E9' : idx === 2 ? '#E17055' : '#A29BFE'
+                      }}>
+                        #{idx + 1}
+                      </span>
+                      <div className="avatar-badge" style={{ background: avatar.bgColor }}>
+                        {avatar.emoji}
+                      </div>
+                      <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#FFFFFF' }}>
+                        {player.display_name}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                      <span style={{ color: '#00B894', fontWeight: 700 }}>
+                        {player.correct_count} / {player.total_answers} Correct
+                      </span>
+                      <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#FDCB6E' }}>
+                        {player.total_score} pts
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

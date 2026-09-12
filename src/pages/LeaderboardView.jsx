@@ -18,7 +18,8 @@ export default function LeaderboardView() {
     try {
       const { data, error } = await supabase
         .from('match_leaderboard')
-        .select('*')
+        .select('*, matches!inner(status)')
+        .eq('matches.status', 'final_results')
         .order('total_score', { ascending: false })
         .limit(50);
 
