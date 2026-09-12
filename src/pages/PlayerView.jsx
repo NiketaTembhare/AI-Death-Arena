@@ -5,6 +5,7 @@ import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
 import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
+import EmojiRain from '../components/EmojiRain';
 
 export default function PlayerView() {
   const navigate = useNavigate();
@@ -802,10 +803,13 @@ export default function PlayerView() {
   if (match?.status === 'round1_results' || match?.status === 'round2_results' || isFinishedRoundQuestions) {
     const roundNum = match.current_round || (match.status === 'round1_results' ? 1 : 2);
     const avatar = getPlayerAvatar(player.display_name);
+    const isFinalOrRound3 = match?.status === 'final_results' || (isFinishedRoundQuestions && roundNum === 3);
+    const isTop3Winner = isFinalOrRound3 && (playerRank === 1 || playerRank === 2 || playerRank === 3);
 
     return (
       <div style={playerContainerStyle}>
-        <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
+        {isTop3Winner && <EmojiRain count={38} />}
+        <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <div className="avatar-badge" style={{ background: avatar.bgColor, width: '64px', height: '64px', fontSize: '2rem', margin: '0 auto 0.75rem' }}>
             {avatar.emoji}
           </div>
@@ -830,8 +834,17 @@ export default function PlayerView() {
             <strong style={{ fontSize: '2rem', color: '#6C5CE7' }}>{playerScore} pts</strong>
             {playerRank && (
               <div style={{ marginTop: '0.4rem' }}>
-                <span style={{ background: '#FEFCBF', color: '#744210', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 800, fontSize: '0.85rem' }}>
-                  ARENA RANK #{playerRank}
+                <span style={{
+                  background: playerRank === 1 ? '#FEFCBF' : playerRank === 2 ? '#E2E8F0' : playerRank === 3 ? '#FED7D7' : '#FEFCBF',
+                  color: playerRank === 1 ? '#744210' : playerRank === 2 ? '#1E293B' : playerRank === 3 ? '#991B1B' : '#744210',
+                  border: `1px solid ${playerRank === 1 ? '#F6E05E' : playerRank === 2 ? '#CBD5E1' : playerRank === 3 ? '#FEB2B2' : '#F6E05E'}`,
+                  padding: '0.35rem 0.85rem',
+                  borderRadius: '12px',
+                  fontWeight: 800,
+                  fontSize: '0.9rem',
+                  display: 'inline-block'
+                }}>
+                  {playerRank === 1 ? '👑 ARENA RANK #1 (CHAMPION!)' : playerRank === 2 ? '🥈 ARENA RANK #2 (RUNNER UP!)' : playerRank === 3 ? '🥉 ARENA RANK #3 (PODIUM!)' : `ARENA RANK #${playerRank}`}
                 </span>
               </div>
             )}
@@ -848,9 +861,12 @@ export default function PlayerView() {
   }
 
   // 5. AFTER ROUND 3 / FINAL MATCH COMPLETE SCREEN
+  const isTop3Winner = playerRank === 1 || playerRank === 2 || playerRank === 3;
+
   return (
     <div style={playerContainerStyle}>
-      <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
+      {isTop3Winner && <EmojiRain count={38} />}
+      <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center', position: 'relative', zIndex: 10 }}>
         <Award size={56} color="#FDCB6E" style={{ margin: '0 auto 0.5rem' }} />
         <h2 style={{ fontSize: '2rem' }}>MATCH COMPLETE</h2>
         <p style={{ color: '#636E72', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
@@ -863,8 +879,17 @@ export default function PlayerView() {
 
           {playerRank && (
             <div style={{ marginTop: '0.5rem' }}>
-              <span style={{ background: '#FEFCBF', color: '#744210', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 800, fontSize: '0.95rem' }}>
-                FINAL RANK #{playerRank}
+              <span style={{
+                background: playerRank === 1 ? '#FEFCBF' : playerRank === 2 ? '#E2E8F0' : playerRank === 3 ? '#FED7D7' : '#FEFCBF',
+                color: playerRank === 1 ? '#744210' : playerRank === 2 ? '#1E293B' : playerRank === 3 ? '#991B1B' : '#744210',
+                border: `1px solid ${playerRank === 1 ? '#F6E05E' : playerRank === 2 ? '#CBD5E1' : playerRank === 3 ? '#FEB2B2' : '#F6E05E'}`,
+                padding: '0.4rem 1rem',
+                borderRadius: '12px',
+                fontWeight: 900,
+                fontSize: '1rem',
+                display: 'inline-block'
+              }}>
+                {playerRank === 1 ? '👑 FINAL RANK #1 (CHAMPION!)' : playerRank === 2 ? '🥈 FINAL RANK #2 (RUNNER UP!)' : playerRank === 3 ? '🥉 FINAL RANK #3 (PODIUM!)' : `FINAL RANK #${playerRank}`}
               </span>
             </div>
           )}
