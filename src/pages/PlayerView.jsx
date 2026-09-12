@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
-import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, Sparkles, HelpCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Award, ShieldAlert } from 'lucide-react';
 
 export default function PlayerView() {
   const [searchParams] = useSearchParams();
@@ -23,12 +23,16 @@ export default function PlayerView() {
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
-  const [answerResult, setAnswerResult] = useState(null); // { isCorrect, correctOption, points, explanation }
+  const [answerResult, setAnswerResult] = useState(null);
+
+  // Direct Calculated Scores
   const [playerScore, setPlayerScore] = useState(0);
   const [playerRank, setPlayerRank] = useState(null);
+  const [roundScore, setRoundScore] = useState(0);
+  const [roundCorrect, setRoundCorrect] = useState(0);
 
   // Synchronized Timers & Countdown
-  const [countdownNum, setCountdownNum] = useState(null); // 3, 2, 1, 0 (GO!) or null
+  const [countdownNum, setCountdownNum] = useState(null);
   const [timeLeftSec, setTimeLeftSec] = useState(15);
   const questionStartTimeRef = useRef(Date.now());
   const timerIntervalRef = useRef(null);
@@ -42,7 +46,6 @@ export default function PlayerView() {
     }
     setDeviceToken(token);
 
-    // Check soft repeat player deterrent
     const completedToday = localStorage.getItem('arena_completed_date');
     const todayStr = new Date().toISOString().split('T')[0];
     if (completedToday === todayStr) {
@@ -50,14 +53,14 @@ export default function PlayerView() {
     }
   }, []);
 
-  // 2. Fetch Match by Room Code & Re-hydrate existing player by deviceToken
+  // 2. Fetch Match by Room Code & Re-hydrate player
   useEffect(() => {
     if (!roomCodeParam) return;
     fetchMatchByCode(roomCodeParam);
   }, [roomCodeParam, deviceToken]);
 
   const fetchMatchByCode = async (code) => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('matches')
       .select('*')
       .eq('room_code', code.toUpperCase())
@@ -66,7 +69,6 @@ export default function PlayerView() {
     if (data) {
       setMatch(data);
 
-      // Re-hydrate player state on page refresh if already joined
       if (deviceToken) {
         const { data: existingPlayer } = await supabase
           .from('match_players')
@@ -82,15 +84,14 @@ export default function PlayerView() {
     }
   };
 
-  // 3. Realtime Subscription for Match status updates
+  // 3. Realtime Subscription for Match updates
   useEffect(() => {
     if (!match?.id) return;
 
     const matchChannel = supabase
       .channel(`player_match_${match.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` }, (payload) => {
-        const updatedMatch = payload.new;
-        setMatch(updatedMatch);
+        setMatch(payload.new);
       })
       .subscribe();
 
@@ -99,25 +100,64 @@ export default function PlayerView() {
     };
   }, [match?.id]);
 
-  // 4. Handle Round Changes & Synchronized Countdown
+  // 4. Compute Player Score, Rank, and Round Stats directly from match_answers table
+  const fetchPlayerDirectStats = async (matchId, playerId, currentRound) => {
+    if (!matchId || !playerId) return;
+
+    // Fetch answers for all players in this match to compute rank & total score
+    const { data: allAnswers } = await supabase
+      .from('match_answers')
+      .select('player_id, round, is_correct, points_earned')
+      .eq('match_id', matchId);
+
+    const { data: allPlayers } = await supabase
+      .from('match_players')
+      .select('id')
+      .eq('match_id', matchId);
+
+    const answers = allAnswers || [];
+
+    if (allPlayers) {
+      const scores = allPlayers.map((p) => {
+        const pAnswers = answers.filter((a) => a.player_id === p.id);
+        const total = pAnswers.reduce((sum, a) => sum + (a.points_earned || 0), 0);
+        return { player_id: p.id, totalScore: total };
+      });
+
+      scores.sort((a, b) => b.totalScore - a.totalScore);
+
+      const myRow = scores.find((s) => s.player_id === playerId);
+      const myRankIndex = scores.findIndex((s) => s.player_id === playerId);
+
+      if (myRow) setPlayerScore(myRow.totalScore);
+      if (myRankIndex !== -1) setPlayerRank(myRankIndex + 1);
+    }
+
+    // Compute specific round stats for this player
+    if (currentRound) {
+      const roundAnswers = answers.filter((a) => a.player_id === playerId && a.round === Number(currentRound));
+      const rScore = roundAnswers.reduce((sum, a) => sum + (a.points_earned || 0), 0);
+      const rCorrect = roundAnswers.filter((a) => a.is_correct === true).length;
+      setRoundScore(rScore);
+      setRoundCorrect(rCorrect);
+    }
+  };
+
+  // 5. Handle Round Changes & Countdown
   useEffect(() => {
     if (!match || !player) return;
 
+    fetchPlayerDirectStats(match.id, player.id, match.current_round);
+
     if (match.status === 'round1' || match.status === 'round2' || match.status === 'round3') {
-      const currentRoundNum = match.current_round;
-      fetchPlayerQuestions(match.id, player.id, currentRoundNum);
+      fetchPlayerQuestions(match.id, player.id, match.current_round);
       handleSynchronizedCountdown(match.round_started_at);
-    } else if (match.status.includes('results')) {
-      if (match.status === 'final_results') {
-        // Flag completed date in localStorage for repeat player deterrent
-        const todayStr = new Date().toISOString().split('T')[0];
-        localStorage.setItem('arena_completed_date', todayStr);
-      }
-      fetchPlayerScoreAndRank(match.id, player.id);
+    } else if (match.status === 'final_results') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      localStorage.setItem('arena_completed_date', todayStr);
     }
   }, [match?.status, match?.round_started_at, player?.id]);
 
-  // Synchronized countdown computed from server timestamp round_started_at
   const handleSynchronizedCountdown = (startedAtIso) => {
     if (!startedAtIso) return;
     const targetMs = new Date(startedAtIso).getTime();
@@ -130,17 +170,16 @@ export default function PlayerView() {
         setCountdownNum(diffSec);
         audioManager.playCountdownBeep(diffSec);
       } else if (diffSec === 0) {
-        setCountdownNum(0); // GO!
+        setCountdownNum(0);
         audioManager.playCountdownBeep(0);
       } else {
-        setCountdownNum(null); // Countdown finished
+        setCountdownNum(null);
         clearInterval(interval);
-        startPerQuestionTimer(15); // Start 15s timer for question 1
+        startPerQuestionTimer(15);
       }
     }, 500);
   };
 
-  // Fetch 5 assigned questions for this player & round
   const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {
     const { data } = await supabase
       .from('match_round_questions')
@@ -153,13 +192,9 @@ export default function PlayerView() {
     if (data && data.length > 0) {
       const formattedQ = data.map((item) => {
         const q = item.questions;
-
-        // For Round 1 (Image Comparison), randomize left vs right image fresh per question
         let isRealOnLeft = Math.random() > 0.5;
 
         const rawOptions = q.options ? (typeof q.options === 'string' ? JSON.parse(q.options) : q.options) : [];
-
-        // Fisher-Yates shuffle MCQ options array fresh per player per question
         const shuffledOptions = [...rawOptions];
         for (let i = shuffledOptions.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -181,7 +216,6 @@ export default function PlayerView() {
         };
       });
 
-      // Check already answered questions for this round to resume exact position on refresh
       const { data: answeredRows } = await supabase
         .from('match_answers')
         .select('question_id')
@@ -204,7 +238,6 @@ export default function PlayerView() {
     }
   };
 
-  // Start server-authoritative timer for current question
   const startPerQuestionTimer = (durationSec = 15) => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     questionStartTimeRef.current = Date.now();
@@ -225,7 +258,6 @@ export default function PlayerView() {
     }, 200);
   };
 
-  // Submit Answer Action
   const submitAnswer = async (chosenOption) => {
     if (isAnswerSubmitted || !match || !player || !questions[currentQIndex]) return;
 
@@ -235,16 +267,13 @@ export default function PlayerView() {
     const currentQ = questions[currentQIndex];
     const responseTimeMs = Date.now() - questionStartTimeRef.current;
 
-    // Check correctness
     let isCorrect = false;
     if (currentQ.round === 1) {
-      // Round 1 option is 'ai' or 'real'
       isCorrect = chosenOption === 'ai';
     } else {
       isCorrect = chosenOption === currentQ.correct_option;
     }
 
-    // Points calculation: 100 base + speed bonus up to 50
     let points = 0;
     if (isCorrect) {
       const speedBonus = Math.max(0, Math.round((15000 - responseTimeMs) / 300));
@@ -261,7 +290,6 @@ export default function PlayerView() {
       explanation: currentQ.explanation
     });
 
-    // Save to Supabase DB
     try {
       await supabase.from('match_answers').insert([
         {
@@ -275,17 +303,18 @@ export default function PlayerView() {
           response_time_ms: responseTimeMs
         }
       ]);
+
+      // Instantly refresh player direct score & rank after submitting answer
+      fetchPlayerDirectStats(match.id, player.id, match.current_round);
     } catch (err) {
       console.error('Error saving answer:', err);
     }
 
-    // Auto advance after 2.5s reveal
     setTimeout(() => {
       advanceToNextQuestion();
     }, 2500);
   };
 
-  // Timeout handling
   const handleTimeoutOrAutoAdvance = () => {
     if (!isAnswerSubmitted) {
       submitAnswer('TIMEOUT');
@@ -300,29 +329,11 @@ export default function PlayerView() {
       setAnswerResult(null);
       startPerQuestionTimer(15);
     } else {
-      // Round complete for this player!
       setIsAnswerSubmitted(true);
+      fetchPlayerDirectStats(match.id, player.id, match.current_round);
     }
   };
 
-  // Fetch final player score and rank from leaderboard view
-  const fetchPlayerScoreAndRank = async (matchId, playerId) => {
-    const { data } = await supabase
-      .from('match_leaderboard')
-      .select('*')
-      .eq('match_id', matchId)
-      .order('total_score', { ascending: false });
-
-    if (data) {
-      const playerRowIndex = data.findIndex((row) => row.player_id === playerId);
-      if (playerRowIndex !== -1) {
-        setPlayerScore(data[playerRowIndex].total_score);
-        setPlayerRank(playerRowIndex + 1);
-      }
-    }
-  };
-
-  // Player Join Submit Action (STRICT validation requirement)
   const handleJoinGame = async (e) => {
     e.preventDefault();
     const cleanName = nameInput.trim();
@@ -342,7 +353,6 @@ export default function PlayerView() {
         .single();
 
       if (error) {
-        // If unique constraint error (device already joined this match), fetch existing row
         const { data: existingPlayer } = await supabase
           .from('match_players')
           .select('*')
@@ -358,7 +368,6 @@ export default function PlayerView() {
     }
   };
 
-  // Host PIN Override for repeat player (Single global Host PIN: 1234)
   const handleOverrideRepeat = (e) => {
     e.preventDefault();
     if (overridePin === '1234') {
@@ -368,7 +377,6 @@ export default function PlayerView() {
     }
   };
 
-  // Screen Rendering
   if (!roomCodeParam) {
     return (
       <div style={playerContainerStyle}>
@@ -467,7 +475,7 @@ export default function PlayerView() {
     );
   }
 
-  // Synchronized 3-2-1 Countdown Overlay
+  // Countdown Overlay
   if (countdownNum !== null) {
     return (
       <div className="countdown-overlay">
@@ -507,57 +515,85 @@ export default function PlayerView() {
 
   // 3. GAMEPLAY SCREENS (ROUNDS 1, 2, 3)
   const currentQ = questions[currentQIndex];
+  const isRoundActive = (match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3');
+  const isFinishedRoundQuestions = isAnswerSubmitted && currentQIndex === 4;
 
-  if ((match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3') && currentQ) {
+  if (isRoundActive && currentQ && !isFinishedRoundQuestions) {
     const avatar = getPlayerAvatar(player.display_name);
 
     return (
       <div style={gameplayContainerStyle}>
         {/* Mobile Top Header Bar */}
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <div className="avatar-badge" style={{ background: avatar.bgColor, width: '36px', height: '36px', fontSize: '1.2rem' }}>
+            <div className="avatar-badge" style={{ background: avatar.bgColor, width: '32px', height: '32px', fontSize: '1rem' }}>
               {avatar.emoji}
             </div>
-            <span style={{ fontWeight: 800, fontSize: '1rem', color: '#2D3436' }}>{player.display_name}</span>
+            <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#2D3436' }}>{player.display_name}</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {/* Question Progress Pill */}
-            <span style={{ background: '#6C5CE7', color: '#FFFFFF', padding: '0.3rem 0.75rem', borderRadius: '999px', fontWeight: 800, fontSize: '0.9rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ background: '#6C5CE7', color: '#FFFFFF', padding: '0.25rem 0.6rem', borderRadius: '999px', fontWeight: 800, fontSize: '0.85rem' }}>
               {currentQIndex + 1} / 5
             </span>
-
-            {/* Timer Pill */}
-            <span className="timer-pill" style={{ fontSize: '1rem', padding: '0.3rem 0.75rem' }}>
-              <Clock size={16} /> {timeLeftSec}s
+            <span className="timer-pill" style={{ fontSize: '0.9rem', padding: '0.25rem 0.6rem' }}>
+              <Clock size={14} /> {timeLeftSec}s
             </span>
           </div>
         </header>
 
         {/* Question Title & Prompt */}
-        <div style={{ textAlign: 'center', marginBottom: '0.75rem' }}>
-          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '0.4rem' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
             ROUND {currentQ.round} — {currentQ.round === 1 ? 'REAL OR FAKE?' : currentQ.round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
           </span>
-          <h2 style={{ fontSize: '1.25rem', color: '#2D3436', marginTop: '0.2rem' }}>
+          <h2 style={{ fontSize: '1.1rem', color: '#2D3436', marginTop: '0.1rem', lineHeight: '1.2' }}>
             {currentQ.prompt_text}
           </h2>
         </div>
 
+        {/* ZERO-SCROLL PLACEMENT: Answer Feedback Banner right below question prompt */}
+        {answerResult && (
+          <div style={{
+            background: answerResult.isCorrect ? '#E6FFFA' : '#FFF5F5',
+            border: `2px solid ${answerResult.isCorrect ? '#38B2AC' : '#E53E3E'}`,
+            borderRadius: '12px',
+            padding: '0.5rem 0.75rem',
+            textAlign: 'center',
+            marginBottom: '0.5rem',
+            animation: 'fadeIn 0.2s ease'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.1rem' }}>
+              {answerResult.isCorrect ? (
+                <>
+                  <CheckCircle2 color="#38B2AC" size={20} />
+                  <strong style={{ color: '#2C7A7B', fontSize: '1rem' }}>CORRECT! +{answerResult.points} pts</strong>
+                </>
+              ) : (
+                <>
+                  <XCircle color="#E53E3E" size={20} />
+                  <strong style={{ color: '#C53030', fontSize: '1rem' }}>INCORRECT</strong>
+                </>
+              )}
+            </div>
+            <p style={{ color: '#4A5568', fontSize: '0.8rem', margin: 0 }}>
+              {answerResult.explanation}
+            </p>
+          </div>
+        )}
+
         {/* Content Area (Round 1 Images vs Round 2 Logo vs Round 3 Emoji) */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', marginBottom: '0.75rem' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', marginBottom: '0.5rem' }}>
 
           {/* ROUND 1: Two Images Side by Side */}
           {currentQ.round === 1 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', height: '220px' }}>
-              {/* Left Image */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', height: '170px' }}>
               <button
                 disabled={isAnswerSubmitted}
                 onClick={() => submitAnswer(currentQ.isRealOnLeft ? 'real' : 'ai')}
                 style={{
                   border: selectedOption === (currentQ.isRealOnLeft ? 'real' : 'ai') ? '4px solid #6C5CE7' : '2px solid #E2E8F0',
-                  borderRadius: '16px',
+                  borderRadius: '12px',
                   overflow: 'hidden',
                   position: 'relative',
                   padding: 0,
@@ -571,18 +607,17 @@ export default function PlayerView() {
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
                 />
-                <span style={{ position: 'absolute', bottom: '8px', left: '8px', background: 'rgba(0,0,0,0.6)', color: '#FFF', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 800 }}>
+                <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.6)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
                   IMAGE A
                 </span>
               </button>
 
-              {/* Right Image */}
               <button
                 disabled={isAnswerSubmitted}
                 onClick={() => submitAnswer(currentQ.isRealOnLeft ? 'ai' : 'real')}
                 style={{
                   border: selectedOption === (currentQ.isRealOnLeft ? 'ai' : 'real') ? '4px solid #6C5CE7' : '2px solid #E2E8F0',
-                  borderRadius: '16px',
+                  borderRadius: '12px',
                   overflow: 'hidden',
                   position: 'relative',
                   padding: 0,
@@ -596,7 +631,7 @@ export default function PlayerView() {
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
                 />
-                <span style={{ position: 'absolute', bottom: '8px', left: '8px', background: 'rgba(0,0,0,0.6)', color: '#FFF', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 800 }}>
+                <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.6)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
                   IMAGE B
                 </span>
               </button>
@@ -605,8 +640,8 @@ export default function PlayerView() {
 
           {/* ROUND 2: Brand Logo Display */}
           {currentQ.round === 2 && (
-            <div style={{ textAlign: 'center', margin: '0.5rem 0' }}>
-              <div style={{ width: '120px', height: '120px', margin: '0 auto', padding: '1rem', background: '#FFFFFF', borderRadius: '24px', boxShadow: '0 8px 24px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ textAlign: 'center', margin: '0.25rem 0' }}>
+              <div style={{ width: '90px', height: '90px', margin: '0 auto', padding: '0.75rem', background: '#FFFFFF', borderRadius: '20px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img
                   src={currentQ.logo_url}
                   alt="Brand Logo"
@@ -619,8 +654,8 @@ export default function PlayerView() {
 
           {/* ROUND 3: Emoji Clue Display */}
           {currentQ.round === 3 && (
-            <div style={{ textAlign: 'center', margin: '1rem 0' }}>
-              <span style={{ fontSize: '4.5rem', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.15))' }}>
+            <div style={{ textAlign: 'center', margin: '0.5rem 0' }}>
+              <span style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.15))' }}>
                 {currentQ.prompt_text}
               </span>
             </div>
@@ -628,7 +663,7 @@ export default function PlayerView() {
 
           {/* Answer Options Grid (Round 2 & 3: 4 Choice Buttons) */}
           {currentQ.round !== 1 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
               {currentQ.options.map((optionText, idx) => {
                 const colors = ['#FF7675', '#0984E3', '#FDCB6E', '#00B894'];
                 const optionColor = colors[idx % 4];
@@ -643,10 +678,10 @@ export default function PlayerView() {
                     style={{
                       backgroundColor: optionColor,
                       color: idx === 2 ? '#2D3436' : '#FFFFFF',
-                      fontSize: '1rem',
-                      padding: '0.9rem 0.5rem',
-                      minHeight: '60px',
-                      borderRadius: '16px',
+                      fontSize: '0.95rem',
+                      padding: '0.6rem 0.4rem',
+                      minHeight: '48px',
+                      borderRadius: '12px',
                       opacity: isAnswerSubmitted && !isSelected ? 0.4 : 1,
                       outline: isSelected ? '4px solid #2D3436' : 'none'
                     }}
@@ -658,42 +693,13 @@ export default function PlayerView() {
             </div>
           )}
         </div>
-
-        {/* Answer Result & Explanation Overlay */}
-        {answerResult && (
-          <div style={{
-            background: answerResult.isCorrect ? '#E6FFFA' : '#FFF5F5',
-            border: `2px solid ${answerResult.isCorrect ? '#38B2AC' : '#E53E3E'}`,
-            borderRadius: '16px',
-            padding: '0.85rem 1rem',
-            textAlign: 'center',
-            animation: 'fadeIn 0.2s ease'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
-              {answerResult.isCorrect ? (
-                <>
-                  <CheckCircle2 color="#38B2AC" size={24} />
-                  <strong style={{ color: '#2C7A7B', fontSize: '1.1rem' }}>CORRECT! +{answerResult.points} pts</strong>
-                </>
-              ) : (
-                <>
-                  <XCircle color="#E53E3E" size={24} />
-                  <strong style={{ color: '#C53030', fontSize: '1.1rem' }}>INCORRECT</strong>
-                </>
-              )}
-            </div>
-            <p style={{ color: '#4A5568', fontSize: '0.85rem' }}>
-              {answerResult.explanation}
-            </p>
-          </div>
-        )}
       </div>
     );
   }
 
-  // 4. INTERIM ROUND RESULTS WAIT SCREEN (Round 1 & Round 2 Results)
-  if (match?.status === 'round1_results' || match?.status === 'round2_results') {
-    const roundNum = match.status === 'round1_results' ? 1 : 2;
+  // 4. INTERIM ROUND SUMMARY SCREEN (Shown after question 5 or during round results)
+  if (match?.status === 'round1_results' || match?.status === 'round2_results' || isFinishedRoundQuestions) {
+    const roundNum = match.current_round || (match.status === 'round1_results' ? 1 : 2);
     const avatar = getPlayerAvatar(player.display_name);
 
     return (
@@ -703,17 +709,28 @@ export default function PlayerView() {
             {avatar.emoji}
           </div>
           <h2 style={{ fontSize: '1.6rem', color: '#2D3436' }}>ROUND {roundNum} COMPLETE!</h2>
-          <span style={{ display: 'inline-block', background: '#E0E7FF', color: '#4338CA', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 700, marginTop: '0.4rem', marginBottom: '1.5rem' }}>
+          <span style={{ display: 'inline-block', background: '#E0E7FF', color: '#4338CA', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 700, marginTop: '0.4rem', marginBottom: '1.25rem' }}>
             {player.display_name}
           </span>
 
-          <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '20px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>
-            <span style={{ fontSize: '0.85rem', color: '#636E72', fontWeight: 700, display: 'block' }}>YOUR CURRENT SCORE</span>
-            <strong style={{ fontSize: '2.5rem', color: '#6C5CE7' }}>{playerScore} pts</strong>
+          <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '20px', border: '1px solid #E2E8F0', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+              <div style={{ background: '#FFFFFF', padding: '0.75rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.75rem', color: '#636E72', fontWeight: 700, display: 'block' }}>ROUND SCORE</span>
+                <strong style={{ fontSize: '1.5rem', color: '#00B894' }}>+{roundScore} pts</strong>
+              </div>
+              <div style={{ background: '#FFFFFF', padding: '0.75rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.75rem', color: '#636E72', fontWeight: 700, display: 'block' }}>ACCURACY</span>
+                <strong style={{ fontSize: '1.5rem', color: '#0984E3' }}>{roundCorrect} / 5</strong>
+              </div>
+            </div>
+
+            <span style={{ fontSize: '0.8rem', color: '#636E72', fontWeight: 700, display: 'block' }}>TOTAL RUNNING SCORE</span>
+            <strong style={{ fontSize: '2rem', color: '#6C5CE7' }}>{playerScore} pts</strong>
             {playerRank && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <span style={{ background: '#FEFCBF', color: '#744210', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 800, fontSize: '0.9rem' }}>
-                  CURRENT RANK #{playerRank}
+              <div style={{ marginTop: '0.4rem' }}>
+                <span style={{ background: '#FEFCBF', color: '#744210', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 800, fontSize: '0.85rem' }}>
+                  ARENA RANK #{playerRank}
                 </span>
               </div>
             )}
@@ -721,7 +738,7 @@ export default function PlayerView() {
 
           <div style={{ background: '#EEF2FF', padding: '1rem', borderRadius: '16px', border: '1px solid #C7D2FE' }}>
             <p style={{ color: '#4338CA', fontWeight: 600, fontSize: '0.9rem' }}>
-              Look at the arena projector display! Waiting for host to start Round {roundNum + 1}...
+              Look at the arena projector display! Waiting for host to reveal round results & start the next round...
             </p>
           </div>
         </div>
@@ -746,7 +763,7 @@ export default function PlayerView() {
           {playerRank && (
             <div style={{ marginTop: '0.5rem' }}>
               <span style={{ background: '#FEFCBF', color: '#744210', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 800, fontSize: '0.95rem' }}>
-                RANK #{playerRank}
+                FINAL RANK #{playerRank}
               </span>
             </div>
           )}
@@ -775,7 +792,7 @@ const gameplayContainerStyle = {
   maxHeight: '100vh',
   display: 'flex',
   flexDirection: 'column',
-  padding: 'max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-right))',
+  padding: 'max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-right))',
   background: '#FFFFFF',
   overflow: 'hidden'
 };

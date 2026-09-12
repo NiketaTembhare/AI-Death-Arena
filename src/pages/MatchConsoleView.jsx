@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
-import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, CheckCircle, ArrowRight } from 'lucide-react';
+import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight } from 'lucide-react';
 
 export default function MatchConsoleView() {
   const [match, setMatch] = useState(null);
@@ -19,8 +19,7 @@ export default function MatchConsoleView() {
     return audioManager.subscribe((muted) => setIsMuted(muted));
   }, []);
 
-  // 1. Fetch current active match on mount (or re-fetch after status changes)
-  // Excludes both 'archived' AND 'final_results' to find currently live matches
+  // 1. Fetch current active match on mount
   const fetchActiveMatch = async () => {
     setLoading(true);
     try {
@@ -49,14 +48,67 @@ export default function MatchConsoleView() {
     fetchActiveMatch();
   }, []);
 
-  // 2. Realtime Subscriptions for Matches, Players, and Leaderboard
+  // 2. Direct-table aggregate calculation for live standings & round completion counter
+  const fetchLiveLeaderboardAndProgress = async (matchId, currentRound) => {
+    if (!matchId) return;
+
+    // Fetch players
+    const { data: playerRows } = await supabase
+      .from('match_players')
+      .select('id, display_name, device_token, joined_at')
+      .eq('match_id', matchId)
+      .order('joined_at', { ascending: true });
+
+    if (!playerRows) return;
+    setPlayers(playerRows);
+
+    // Fetch submitted answers
+    const { data: answerRows } = await supabase
+      .from('match_answers')
+      .select('player_id, round, is_correct, points_earned')
+      .eq('match_id', matchId);
+
+    const answers = answerRows || [];
+
+    let donePlayersCount = 0;
+
+    const aggregated = playerRows.map((p) => {
+      const pAnswers = answers.filter((a) => a.player_id === p.id);
+      const totalScore = pAnswers.reduce((sum, a) => sum + (a.points_earned || 0), 0);
+      const correctCount = pAnswers.filter((a) => a.is_correct === true).length;
+      
+      const roundAnswersCount = currentRound 
+        ? pAnswers.filter((a) => a.round === Number(currentRound)).length 
+        : 0;
+
+      if (roundAnswersCount >= 5) {
+        donePlayersCount++;
+      }
+
+      return {
+        player_id: p.id,
+        match_id: matchId,
+        display_name: p.display_name,
+        device_token: p.device_token,
+        total_score: totalScore,
+        correct_count: correctCount,
+        total_answers: pAnswers.length,
+        round_answers_count: roundAnswersCount,
+        joined_at: p.joined_at
+      };
+    });
+
+    aggregated.sort((a, b) => b.total_score - a.total_score);
+
+    setLeaderboard(aggregated);
+    setAnsweredCount(donePlayersCount);
+  };
+
+  // 3. Realtime Subscriptions
   useEffect(() => {
     if (!match?.id) return;
 
-    // Fetch initial player roster & leaderboard
-    fetchRoster(match.id);
-    fetchLeaderboard(match.id);
-    fetchAnswerProgress(match.id, match.current_round);
+    fetchLiveLeaderboardAndProgress(match.id, match.current_round);
 
     // Subscribe to match status changes
     const matchChannel = supabase
@@ -64,9 +116,8 @@ export default function MatchConsoleView() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` }, (payload) => {
         const newMatch = payload.new;
         setMatch(newMatch);
-        fetchAnswerProgress(newMatch.id, newMatch.current_round);
+        fetchLiveLeaderboardAndProgress(newMatch.id, newMatch.current_round);
 
-        // Sound cues trigger on DB status changes
         if (previousStatusRef.current !== newMatch.status) {
           handleStatusSoundCue(newMatch.status);
           previousStatusRef.current = newMatch.status;
@@ -78,17 +129,15 @@ export default function MatchConsoleView() {
     const playerChannel = supabase
       .channel(`players_${match.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'match_players', filter: `match_id=eq.${match.id}` }, () => {
-        fetchRoster(match.id);
-        fetchLeaderboard(match.id);
+        fetchLiveLeaderboardAndProgress(match.id, match.current_round);
       })
       .subscribe();
 
-    // Subscribe to submitted answers for live leaderboard updates & host progress counter
+    // Subscribe to submitted answers
     const answersChannel = supabase
       .channel(`answers_${match.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'match_answers', filter: `match_id=eq.${match.id}` }, () => {
-        fetchLeaderboard(match.id);
-        fetchAnswerProgress(match.id, match.current_round);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_answers', filter: `match_id=eq.${match.id}` }, () => {
+        fetchLiveLeaderboardAndProgress(match.id, match.current_round);
       })
       .subscribe();
 
@@ -98,38 +147,6 @@ export default function MatchConsoleView() {
       supabase.removeChannel(answersChannel);
     };
   }, [match?.id]);
-
-  const fetchRoster = async (matchId) => {
-    const { data } = await supabase
-      .from('match_players')
-      .select('*')
-      .eq('match_id', matchId)
-      .order('joined_at', { ascending: true });
-    if (data) setPlayers(data);
-  };
-
-  const fetchLeaderboard = async (matchId) => {
-    const { data } = await supabase
-      .from('match_leaderboard')
-      .select('*')
-      .eq('match_id', matchId)
-      .order('total_score', { ascending: false });
-    if (data) setLeaderboard(data);
-  };
-
-  const fetchAnswerProgress = async (matchId, roundNum) => {
-    if (!roundNum) return;
-    const { data } = await supabase
-      .from('match_answers')
-      .select('player_id')
-      .eq('match_id', matchId)
-      .eq('round', roundNum);
-
-    if (data) {
-      const uniquePlayers = new Set(data.map((row) => row.player_id));
-      setAnsweredCount(uniquePlayers.size);
-    }
-  };
 
   const handleStatusSoundCue = (status) => {
     if (status.startsWith('round') && !status.includes('results')) {
@@ -146,17 +163,14 @@ export default function MatchConsoleView() {
     audioManager.initContext();
     setLoading(true);
     try {
-      // 1. Archive any non-final matches
       await supabase
         .from('matches')
         .update({ status: 'archived' })
         .neq('status', 'final_results')
         .neq('status', 'archived');
 
-      // 2. Generate random 6-character room code
       const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-      // 3. Create fresh match row
       const { data, error } = await supabase
         .from('matches')
         .insert([
@@ -199,9 +213,8 @@ export default function MatchConsoleView() {
 
     const rowsToInsert = [];
     currentPlayers.forEach((player) => {
-      // Shuffle active questions for this player
       const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
-      const selected = shuffled.slice(0, 5); // 5 questions per round
+      const selected = shuffled.slice(0, 5);
 
       selected.forEach((q, idx) => {
         rowsToInsert.push({
@@ -227,12 +240,10 @@ export default function MatchConsoleView() {
       current_round: roundNum
     };
 
-    // If starting a gameplay round, set synchronized round_started_at = (now + 3s)
     if (nextStatus === 'round1' || nextStatus === 'round2' || nextStatus === 'round3') {
       const targetTime = new Date(Date.now() + 3000).toISOString();
       updatePayload.round_started_at = targetTime;
 
-      // Assign 5 random questions per player for this round
       await assignRoundQuestionsForPlayers(match.id, roundNum);
     }
 
@@ -256,7 +267,6 @@ export default function MatchConsoleView() {
     );
   }
 
-  // Client-side QR join URL
   const joinUrl = match ? `${window.location.origin}/play?room=${match.room_code}` : '';
 
   return (
@@ -456,58 +466,62 @@ export default function MatchConsoleView() {
           <div className="card-console">
             <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#A29BFE' }}>LIVE ARENA STANDINGS</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {leaderboard.map((player, idx) => {
-                const avatar = getPlayerAvatar(player.display_name);
-                const isFirst = idx === 0;
-                return (
-                  <div
-                    key={player.player_id}
-                    style={{
-                      background: isFirst ? 'linear-gradient(90deg, #1E1A3C, #322A63)' : '#161334',
-                      border: isFirst ? '2px solid #FDCB6E' : '1px solid #2D2856',
-                      borderRadius: '16px',
-                      padding: '1rem 1.5rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      transition: 'transform 0.3s ease'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <span style={{
-                        fontSize: '1.5rem',
-                        fontWeight: 900,
-                        width: '36px',
-                        color: isFirst ? '#FDCB6E' : '#A29BFE'
-                      }}>
-                        #{idx + 1}
-                      </span>
+              {leaderboard.length === 0 ? (
+                <p style={{ color: '#A29BFE', textAlign: 'center', padding: '2rem' }}>Waiting for player scores...</p>
+              ) : (
+                leaderboard.map((player, idx) => {
+                  const avatar = getPlayerAvatar(player.display_name);
+                  const isFirst = idx === 0;
+                  return (
+                    <div
+                      key={player.player_id}
+                      style={{
+                        background: isFirst ? 'linear-gradient(90deg, #1E1A3C, #322A63)' : '#161334',
+                        border: isFirst ? '2px solid #FDCB6E' : '1px solid #2D2856',
+                        borderRadius: '16px',
+                        padding: '1rem 1.5rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        transition: 'transform 0.3s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <span style={{
+                          fontSize: '1.5rem',
+                          fontWeight: 900,
+                          width: '36px',
+                          color: isFirst ? '#FDCB6E' : '#A29BFE'
+                        }}>
+                          #{idx + 1}
+                        </span>
 
-                      <div style={{ position: 'relative' }}>
-                        {isFirst && (
-                          <Crown size={22} color="#FDCB6E" style={{ position: 'absolute', top: '-14px', left: '12px' }} />
-                        )}
-                        <div className="avatar-badge" style={{ background: avatar.bgColor }}>
-                          {avatar.emoji}
+                        <div style={{ position: 'relative' }}>
+                          {isFirst && (
+                            <Crown size={22} color="#FDCB6E" style={{ position: 'absolute', top: '-14px', left: '12px' }} />
+                          )}
+                          <div className="avatar-badge" style={{ background: avatar.bgColor }}>
+                            {avatar.emoji}
+                          </div>
                         </div>
+
+                        <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#FFFFFF' }}>
+                          {player.display_name}
+                        </span>
                       </div>
 
-                      <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#FFFFFF' }}>
-                        {player.display_name}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                        <span style={{ color: '#00B894', fontWeight: 700 }}>
+                          {player.correct_count} / {player.total_answers} Correct
+                        </span>
+                        <span style={{ fontSize: '1.5rem', fontWeight: 900, color: '#FDCB6E' }}>
+                          {player.total_score} pts
+                        </span>
+                      </div>
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                      <span style={{ color: '#00B894', fontWeight: 700 }}>
-                        {player.correct_count} / {player.total_answers} Correct
-                      </span>
-                      <span style={{ fontSize: '1.5rem', fontWeight: 900, color: '#FDCB6E' }}>
-                        {player.total_score} pts
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

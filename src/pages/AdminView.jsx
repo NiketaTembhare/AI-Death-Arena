@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, Plus, ToggleLeft, ToggleRight, Trash2, Edit3, Settings } from 'lucide-react';
+import { ArrowLeft, Plus, ToggleLeft, ToggleRight, Trash2, Settings, AlertTriangle } from 'lucide-react';
 
 export default function AdminView() {
   const navigate = useNavigate();
@@ -21,6 +21,11 @@ export default function AdminView() {
   const [correctOption, setCorrectOption] = useState('');
   const [explanation, setExplanation] = useState('');
 
+  // Destructive Reset State
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetConfirmInput, setResetConfirmInput] = useState('');
+  const [resetStatus, setResetStatus] = useState('');
+
   useEffect(() => {
     fetchQuestions();
   }, []);
@@ -37,7 +42,6 @@ export default function AdminView() {
     setLoading(false);
   };
 
-  // Inline Active/Inactive Toggle
   const toggleQuestionActive = async (qId, currentStatus) => {
     const { error } = await supabase
       .from('questions')
@@ -102,6 +106,35 @@ export default function AdminView() {
     fetchQuestions();
   };
 
+  // DESTRUCTIVE DATA WIPEOUT
+  const handleWipeAllData = async (e) => {
+    e.preventDefault();
+    if (resetConfirmInput.trim().toUpperCase() !== 'RESET') {
+      setResetStatus('Please type RESET in all caps to confirm wipeout');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await supabase.from('match_answers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('match_round_questions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('match_players').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('matches').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      localStorage.removeItem('arena_completed_date');
+      localStorage.removeItem('arena_device_token');
+
+      setShowResetModal(false);
+      setResetConfirmInput('');
+      alert('All matches, players, and test scores have been wiped clean! Questions remain intact.');
+    } catch (err) {
+      console.error('Reset wipeout error:', err);
+      alert('Error wiping data. Check Supabase database RLS setup.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredQuestions = questions.filter((q) => {
     if (filterRound === 'all') return true;
     return q.round === Number(filterRound);
@@ -123,9 +156,18 @@ export default function AdminView() {
             <ArrowLeft size={20} /> BACK TO HOME
           </button>
 
-          <button onClick={handleOpenAddForm} className="btn btn-green">
-            <Plus size={20} /> ADD NEW QUESTION
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              onClick={() => { setResetConfirmInput(''); setResetStatus(''); setShowResetModal(true); }}
+              className="btn btn-orange"
+            >
+              <Trash2 size={20} /> RESET ALL MATCH & PLAYER DATA
+            </button>
+
+            <button onClick={handleOpenAddForm} className="btn btn-green">
+              <Plus size={20} /> ADD NEW QUESTION
+            </button>
+          </div>
         </div>
 
         <div className="card-light" style={{ marginBottom: '1.5rem' }}>
@@ -312,6 +354,69 @@ export default function AdminView() {
                 </button>
                 <button type="submit" className="btn btn-green" style={{ flex: 1 }}>
                   Save Question
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Destructive Data Reset Confirmation Modal */}
+      {showResetModal && (
+        <div className="countdown-overlay">
+          <div className="card-light" style={{ width: '90%', maxWidth: '420px', textAlign: 'center' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#FFF5F5', color: '#E53E3E', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+              <AlertTriangle size={32} />
+            </div>
+            <h2 style={{ color: '#C53030', marginBottom: '0.5rem' }}>Reset All Match & Player Data</h2>
+            <p style={{ color: '#4A5568', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+              This will permanently delete all test matches, joined players, assigned round questions, and player answer records. Questions will remain safe.
+            </p>
+
+            <form onSubmit={handleWipeAllData}>
+              <label style={{ fontWeight: 800, fontSize: '0.85rem', color: '#2D3436', display: 'block', marginBottom: '0.5rem' }}>
+                TYPE <strong style={{ color: '#E53E3E' }}>RESET</strong> TO CONFIRM:
+              </label>
+              <input
+                type="text"
+                value={resetConfirmInput}
+                onChange={(e) => setResetConfirmInput(e.target.value)}
+                placeholder="RESET"
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '0.8rem',
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  textAlign: 'center',
+                  letterSpacing: '2px',
+                  borderRadius: '12px',
+                  border: '2px solid #E53E3E',
+                  marginBottom: '1rem'
+                }}
+              />
+              {resetStatus && (
+                <p style={{ color: '#E53E3E', fontSize: '0.85rem', marginBottom: '0.75rem', fontWeight: 600 }}>
+                  {resetStatus}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowResetModal(false)}
+                  className="btn"
+                  style={{ flex: 1, background: '#DFE6E9', color: '#2D3436' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetConfirmInput.trim().toUpperCase() !== 'RESET'}
+                  className={`btn btn-orange ${resetConfirmInput.trim().toUpperCase() !== 'RESET' ? 'btn-disabled' : ''}`}
+                  style={{ flex: 1 }}
+                >
+                  WIPE ALL DATA
                 </button>
               </div>
             </form>
