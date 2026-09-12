@@ -879,7 +879,7 @@ export default function MatchConsoleView() {
       {/* STATE D: MATCH COMPLETE (PODIUM & STANDINGS) */}
       {match && match.status === 'final_results' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          <EmojiRain count={60} />
+          <EmojiRain count={85} />
           {/* Top 3 Podium Highlight */}
           <div className="card-console" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
             <Award size={48} color="#FDCB6E" style={{ margin: '0 auto 0.5rem' }} />

@@ -740,10 +740,22 @@ export default function PlayerView() {
             </div>
           )}
 
-          {/* ROUND 2: Brand Logo Display */}
+          {/* ROUND 2: Brand Logo Display (Larger 140px card & visually centered) */}
           {currentQ.round === 2 && (
-            <div style={{ textAlign: 'center', margin: '0.25rem 0' }}>
-              <div style={{ width: '90px', height: '90px', margin: '0 auto', padding: '0.75rem', background: '#FFFFFF', borderRadius: '20px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.75rem 0' }}>
+              <div style={{
+                width: '140px',
+                height: '140px',
+                margin: '0 auto',
+                padding: '1rem',
+                background: '#FFFFFF',
+                borderRadius: '24px',
+                boxShadow: '0 12px 28px rgba(108, 92, 231, 0.16), 0 4px 12px rgba(0,0,0,0.06)',
+                border: '2px solid #EEF2FF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
                 <img
                   src={currentQ.logo_url}
                   alt="Brand Logo"
@@ -756,8 +768,8 @@ export default function PlayerView() {
 
           {/* ROUND 3: Emoji Clue Display */}
           {currentQ.round === 3 && (
-            <div style={{ textAlign: 'center', margin: '0.5rem 0' }}>
-              <span style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.15))' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.75rem 0' }}>
+              <span style={{ fontSize: '4rem', filter: 'drop-shadow(0 6px 16px rgba(0,0,0,0.18))' }}>
                 {currentQ.prompt_text}
               </span>
             </div>
