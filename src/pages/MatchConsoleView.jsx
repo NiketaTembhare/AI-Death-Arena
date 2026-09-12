@@ -7,6 +7,7 @@ import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
 import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
+import EmojiRain from '../components/EmojiRain';
 
 export default function MatchConsoleView() {
   const navigate = useNavigate();
@@ -220,95 +221,78 @@ export default function MatchConsoleView() {
     setAnsweredCount(donePlayersCount);
   };
 
-  const lastCelebratedStatusRef = useRef(null);
+  const triggerChampionsCelebration = () => {
+    // Play crowd applause & fanfare
+    audioManager.playFinalFanfare();
+    audioManager.playApplauseClapping(4);
 
-  const triggerConfettiShower = (isFinal = false) => {
-    // Bold, rich, dark-bright color palette
-    const darkBrightPalette = [
-      '#F59E0B', // Bold Gold / Amber
-      '#7C3AED', // Deep Vivid Purple
-      '#EC4899', // Hot Neon Pink
-      '#06B6D4', // Electric Teal / Cyan
-      '#EF4444', // Bright Ruby Red
-      '#10B981', // Vivid Emerald Green
-      '#F97316', // Deep Orange
-      '#FBBF24'  // Bright Sunflower Yellow
-    ];
+    // Phase 1: Immediate party popper burst from center
+    setTimeout(() => {
+      const count = 250;
+      const defaults = { origin: { y: 0.6 }, zIndex: 999999 };
 
-    // Emojis requested for Final results: 👏🏻👏🏼✨💸🥳🎉🎊🪩
-    let shapesToUse = ['square', 'circle'];
-    if (isFinal && typeof confetti.shapeFromText === 'function') {
-      const emojis = ['👏🏻', '👏🏼', '✨', '💸', '🥳', '🎉', '🎊', '🪩'];
-      const emojiShapes = emojis.map((text) =>
-        confetti.shapeFromText({ text, scalar: 3.2 })
-      );
-      // Mix emojis heavily into the shapes array along with paper strips
-      shapesToUse = ['square', 'square', 'circle', ...emojiShapes, ...emojiShapes];
-    }
-
-    // Wave 1: Immediate dense drop across top of screen (10 spawn positions across x)
-    const topPositions = [0.08, 0.18, 0.28, 0.38, 0.48, 0.58, 0.68, 0.78, 0.88, 0.95];
-    topPositions.forEach((x) => {
-      confetti({
-        particleCount: 30,
-        angle: 90,
-        spread: 80,
-        origin: { x, y: -0.08 },
-        colors: darkBrightPalette,
-        shapes: shapesToUse,
-        scalar: Math.random() * 1.0 + 1.8, // 1.8 to 2.8 larger size
-        gravity: Math.random() * 0.4 + 0.7, // 0.7 to 1.1 fall speed
-        drift: (Math.random() - 0.5) * 1.0,
-        ticks: 400,
-        zIndex: 999999,
-        disableForReducedMotion: true
-      });
-    });
-
-    // Wave 2: Continuous shower over 2.5 seconds
-    const end = Date.now() + 2500;
-    const interval = setInterval(() => {
-      if (Date.now() > end) {
-        clearInterval(interval);
-        return;
+      function fire(particleRatio, opts) {
+        confetti({
+          ...defaults,
+          ...opts,
+          particleCount: Math.floor(count * particleRatio)
+        });
       }
 
+      fire(0.25, { spread: 26, startVelocity: 55 });
+      fire(0.2, { spread: 60 });
+      fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+      fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+      fire(0.1, { spread: 120, startVelocity: 45 });
+    }, 350);
+
+    // Phase 2: Party Popper Cannons from Left and Right sides
+    setTimeout(() => {
       confetti({
-        particleCount: 20,
-        angle: 90,
-        spread: 90,
-        origin: { x: Math.random(), y: -0.08 },
-        colors: darkBrightPalette,
-        shapes: shapesToUse,
-        scalar: Math.random() * 1.0 + 1.8,
-        gravity: Math.random() * 0.4 + 0.7,
-        drift: (Math.random() - 0.5) * 1.2,
-        ticks: 400,
         zIndex: 999999,
-        disableForReducedMotion: true
+        particleCount: 80,
+        angle: 60,
+        spread: 70,
+        origin: { x: 0, y: 0.75 },
+        colors: ['#FF7675', '#00B894', '#0984E3', '#FDCB6E', '#A29BFE']
       });
-    }, 140);
+      confetti({
+        zIndex: 999999,
+        particleCount: 80,
+        angle: 120,
+        spread: 70,
+        origin: { x: 1, y: 0.75 },
+        colors: ['#FF7675', '#00B894', '#0984E3', '#FDCB6E', '#A29BFE']
+      });
+    }, 900);
+
+    // Phase 3: Star Shower burst at 1.8s
+    setTimeout(() => {
+      confetti({
+        zIndex: 999999,
+        particleCount: 60,
+        spread: 100,
+        origin: { y: 0.4 },
+        shapes: ['star'],
+        colors: ['#FDCB6E', '#F1C40F', '#E67E22', '#FFFFFF']
+      });
+    }, 1800);
   };
 
-  // Watch status transitions to trigger celebration confetti shower & audio cues (once per screen transition)
-  useEffect(() => {
-    if (!match?.status) return;
-    const currentStatus = match.status;
-
-    if (lastCelebratedStatusRef.current === currentStatus) return;
-    lastCelebratedStatusRef.current = currentStatus;
-
-    // Explicitly DO NOT trigger celebration on lobby or active round starts (round1, round2, round3)
-    if (currentStatus === 'round1_results' || currentStatus === 'round2_results') {
+  const handleStatusSoundCue = (status) => {
+    if (status.startsWith('round') && !status.includes('results')) {
+      // Countdown takes care of synchronized voice and audio chimes
+    } else if (status === 'round1_results' || status === 'round2_results') {
+      audioManager.playDrumroll(1.3);
       audioManager.playApplauseClapping(4);
-      audioManager.playRoundEnd();
-      triggerConfettiShower(false);
-    } else if (currentStatus === 'final_results') {
+      setTimeout(() => audioManager.playRoundEnd(), 1300);
+      triggerChampionsCelebration();
+    } else if (status === 'final_results') {
       audioManager.playFinalFanfare();
       audioManager.playApplauseClapping(4);
-      triggerConfettiShower(true); // true = mix emojis (👏🏻👏🏼✨💸🥳🎉🎊🪩) + paper strips!
+      triggerChampionsCelebration();
     }
-  }, [match?.status]);
+  };
 
   // 3. Realtime Subscriptions
   useEffect(() => {
@@ -326,6 +310,11 @@ export default function MatchConsoleView() {
 
         if (newMatch.round_started_at && (newMatch.status === 'round1' || newMatch.status === 'round2' || newMatch.status === 'round3')) {
           handleSynchronizedCountdown(newMatch.round_started_at);
+        }
+
+        if (previousStatusRef.current !== newMatch.status) {
+          handleStatusSoundCue(newMatch.status);
+          previousStatusRef.current = newMatch.status;
         }
       })
       .subscribe();
@@ -892,6 +881,7 @@ export default function MatchConsoleView() {
         {/* STATE D: MATCH COMPLETE (PODIUM & STANDINGS) */}
         {match && match.status === 'final_results' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <EmojiRain count={85} />
             {/* Top 3 Podium Highlight */}
             <div className="card-console" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
               <Award size={48} color="#FDCB6E" style={{ margin: '0 auto 0.5rem' }} />

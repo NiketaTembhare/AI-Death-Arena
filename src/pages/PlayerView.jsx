@@ -5,6 +5,7 @@ import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
 import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
+import EmojiRain from '../components/EmojiRain';
 
 export default function PlayerView() {
   const navigate = useNavigate();
@@ -834,6 +835,7 @@ export default function PlayerView() {
 
     return (
       <div style={playerContainerStyle}>
+        {isTop3Winner && <EmojiRain count={38} />}
         <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <div className="avatar-badge" style={{ background: avatar.bgColor, width: '64px', height: '64px', fontSize: '2rem', margin: '0 auto 0.75rem' }}>
             {avatar.emoji}
@@ -890,6 +892,7 @@ export default function PlayerView() {
 
   return (
     <div style={playerContainerStyle}>
+      {isTop3Winner && <EmojiRain count={38} />}
       <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center', position: 'relative', zIndex: 10 }}>
         <Award size={56} color="#FDCB6E" style={{ margin: '0 auto 0.5rem' }} />
         <h2 style={{ fontSize: '2rem' }}>MATCH COMPLETE</h2>
