@@ -316,7 +316,7 @@ export default function MatchConsoleView() {
                 <h3 style={{ fontSize: '1.5rem' }}>Arena Roster</h3>
               </div>
               <span className="timer-pill" style={{ background: '#00B894', color: '#FFFFFF' }}>
-                {players.length} Players Joined
+                {players.length} / 20 Players Joined
               </span>
             </div>
 
@@ -358,6 +358,11 @@ export default function MatchConsoleView() {
 
             {/* Host Control Area */}
             <div style={{ background: '#161334', padding: '1.25rem', borderRadius: '16px', border: '1px solid #2D2856' }}>
+              {players.length > 0 && players.length < 5 && (
+                <p style={{ color: '#FDCB6E', fontSize: '0.85rem', marginBottom: '0.75rem', textAlign: 'center', fontWeight: 600 }}>
+                  💡 Recommended: at least 5 players for a full arena experience
+                </p>
+              )}
               <button
                 disabled={players.length === 0}
                 onClick={() => updateMatchStatus('round1', 1)}
