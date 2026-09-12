@@ -58,11 +58,17 @@ class AudioManager {
   }
 
   playCountdownBeep(number) {
+    if (this.isMuted) return;
+    this.initContext();
     if (number > 0) {
-      this.playBeep(440 + (4 - number) * 120, 'triangle', 0.2, 0.4);
+      // Clear, musical rising chime for numbers 4, 3, 2, 1
+      const pitches = { 4: 440, 3: 523.25, 2: 659.25, 1: 783.99 };
+      const freq = pitches[number] || 523.25;
+      this.playBeep(freq, 'sine', 0.22, 0.45);
     } else {
-      // "GO!" beep
-      this.playBeep(880, 'square', 0.4, 0.5);
+      // Energetic "GO!" launch chime
+      this.playBeep(1046.5, 'triangle', 0.35, 0.55);
+      setTimeout(() => this.playBeep(1318.51, 'sine', 0.3, 0.45), 80);
     }
   }
 

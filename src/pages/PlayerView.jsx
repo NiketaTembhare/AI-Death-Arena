@@ -38,6 +38,7 @@ export default function PlayerView() {
   const [timeLeftSec, setTimeLeftSec] = useState(15);
   const questionStartTimeRef = useRef(Date.now());
   const timerIntervalRef = useRef(null);
+  const lastBeepedRef = useRef(null);
 
   // 1. Initialize Device Token
   useEffect(() => {
@@ -163,23 +164,30 @@ export default function PlayerView() {
   const handleSynchronizedCountdown = (startedAtIso) => {
     if (!startedAtIso) return;
     const targetMs = new Date(startedAtIso).getTime();
+    lastBeepedRef.current = null;
 
     const interval = setInterval(() => {
       const nowMs = Date.now();
-      const diffSec = Math.ceil((targetMs - nowMs) / 1000);
+      const diffSec = Math.max(0, Math.ceil((targetMs - nowMs) / 1000));
 
       if (diffSec > 0) {
         setCountdownNum(diffSec);
-        audioManager.playCountdownBeep(diffSec);
-      } else if (diffSec === 0) {
+        if (lastBeepedRef.current !== diffSec) {
+          lastBeepedRef.current = diffSec;
+          audioManager.playCountdownBeep(diffSec);
+        }
+      } else if (diffSec === 0 && (nowMs - targetMs) < 900) {
         setCountdownNum(0);
-        audioManager.playCountdownBeep(0);
+        if (lastBeepedRef.current !== 0) {
+          lastBeepedRef.current = 0;
+          audioManager.playCountdownBeep(0);
+        }
       } else {
         setCountdownNum(null);
         clearInterval(interval);
         startPerQuestionTimer(15);
       }
-    }, 500);
+    }, 100);
   };
 
   const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {

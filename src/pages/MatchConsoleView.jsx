@@ -320,7 +320,7 @@ export default function MatchConsoleView() {
     };
 
     if (nextStatus === 'round1' || nextStatus === 'round2' || nextStatus === 'round3') {
-      const targetTime = new Date(Date.now() + 3000).toISOString();
+      const targetTime = new Date(Date.now() + 4000).toISOString();
       updatePayload.round_started_at = targetTime;
 
       await assignRoundQuestionsForPlayers(match.id, roundNum);
