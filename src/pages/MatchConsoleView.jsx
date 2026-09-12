@@ -213,22 +213,25 @@ export default function MatchConsoleView() {
   };
 
   const triggerChampionsCelebration = () => {
-    const count = 200;
-    const defaults = { origin: { y: 0.6 } };
+    // Delay confetti burst slightly (350ms) so podium pillars scale-pop into place first
+    setTimeout(() => {
+      const count = 200;
+      const defaults = { origin: { y: 0.6 } };
 
-    function fire(particleRatio, opts) {
-      confetti({
-        ...defaults,
-        ...opts,
-        particleCount: Math.floor(count * particleRatio)
-      });
-    }
+      function fire(particleRatio, opts) {
+        confetti({
+          ...defaults,
+          ...opts,
+          particleCount: Math.floor(count * particleRatio)
+        });
+      }
 
-    fire(0.25, { spread: 26, startVelocity: 55 });
-    fire(0.2, { spread: 60 });
-    fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
-    fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
-    fire(0.1, { spread: 120, startVelocity: 45 });
+      fire(0.25, { spread: 26, startVelocity: 55 });
+      fire(0.2, { spread: 60 });
+      fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+      fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+      fire(0.1, { spread: 120, startVelocity: 45 });
+    }, 350);
   };
 
   // State A action: Start New Match (auto-archive non-final active matches)
