@@ -641,11 +641,11 @@ export default function PlayerView() {
         </header>
 
         {/* Question Title & Prompt */}
-        <div style={{ textAlign: 'center', marginBottom: currentQ.round === 1 ? '0.3rem' : '0.4rem', marginTop: currentQ.round === 1 ? '1.25rem' : '0', flexShrink: 0 }}>
-          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '0.25rem', flexShrink: 0 }}>
+          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
             ROUND {currentQ.round} — {currentQ.round === 1 ? 'REAL OR FAKE?' : currentQ.round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
           </span>
-          <h2 style={{ fontSize: currentQ.round === 1 ? '1.05rem' : 'clamp(1.05rem, 4.2vw, 1.25rem)', fontWeight: 800, color: '#2D3436', marginTop: '0.15rem', lineHeight: '1.25' }}>
+          <h2 style={{ fontSize: 'clamp(0.98rem, 4vw, 1.15rem)', fontWeight: 800, color: '#2D3436', marginTop: '0.1rem', lineHeight: '1.25' }}>
             {currentQ.round === 3 ? 'Which AI concept or tool do these emojis represent?' : currentQ.prompt_text}
           </h2>
         </div>
@@ -656,9 +656,9 @@ export default function PlayerView() {
             background: answerResult.isCorrect ? '#E6FFFA' : '#FFF5F5',
             border: `2px solid ${answerResult.isCorrect ? '#38B2AC' : '#E53E3E'}`,
             borderRadius: '12px',
-            padding: '0.35rem 0.65rem',
+            padding: '0.35rem 0.6rem',
             textAlign: 'center',
-            marginBottom: '0.4rem',
+            marginBottom: '0.25rem',
             flexShrink: 0,
             animation: 'fadeIn 0.2s ease'
           }}>
@@ -675,84 +675,90 @@ export default function PlayerView() {
                 </>
               )}
             </div>
-            <p style={{ color: '#4A5568', fontSize: '0.78rem', margin: 0, lineHeight: '1.2' }}>
+            <p style={{ color: '#4A5568', fontSize: '0.76rem', margin: 0, lineHeight: '1.2' }}>
               {answerResult.explanation}
             </p>
           </div>
         )}
 
         {/* Content Area (Round 1 Images vs Round 2 Logo vs Round 3 Emoji) */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.35rem', marginBottom: '0.1rem' }}>
 
-          {/* ROUND 1: Two Images Side by Side */}
+          {/* ROUND 1: Two Images Side by Side (Vertically Centered) */}
           {currentQ.round === 1 && (
-            <div key={`r1_${currentQ.id}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', height: '180px', marginTop: 'auto' }}>
-              <button
-                key={`btn_a_${currentQ.id}`}
-                disabled={isAnswerSubmitted}
-                onClick={() => submitAnswer(currentQ.isRealOnLeft ? 'real' : 'ai')}
-                style={{
-                  border: selectedOption === (currentQ.isRealOnLeft ? 'real' : 'ai') ? '4px solid #6C5CE7' : '2px solid #E2E8F0',
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  position: 'relative',
-                  padding: 0,
-                  background: '#F1F5F9',
-                  cursor: 'pointer',
-                  touchAction: 'manipulation'
-                }}
-              >
-                <img
-                  key={`img_a_${currentQ.id}`}
-                  src={currentQ.isRealOnLeft ? currentQ.real_image_url : currentQ.ai_image_url}
-                  alt="Option A"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
-                />
-                <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.6)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
-                  IMAGE A
-                </span>
-              </button>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.15rem 0' }}>
+              <div key={`r1_${currentQ.id}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', width: '100%', height: '175px' }}>
+                <button
+                  key={`btn_a_${currentQ.id}`}
+                  disabled={isAnswerSubmitted}
+                  onClick={() => submitAnswer(currentQ.isRealOnLeft ? 'real' : 'ai')}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    border: selectedOption === (currentQ.isRealOnLeft ? 'real' : 'ai') ? '4px solid #6C5CE7' : '2px solid #E2E8F0',
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    padding: 0,
+                    background: '#F1F5F9',
+                    cursor: 'pointer',
+                    touchAction: 'manipulation'
+                  }}
+                >
+                  <img
+                    key={`img_a_${currentQ.id}`}
+                    src={currentQ.isRealOnLeft ? currentQ.real_image_url : currentQ.ai_image_url}
+                    alt="Option A"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
+                  />
+                  <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.65)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
+                    IMAGE A
+                  </span>
+                </button>
 
-              <button
-                key={`btn_b_${currentQ.id}`}
-                disabled={isAnswerSubmitted}
-                onClick={() => submitAnswer(currentQ.isRealOnLeft ? 'ai' : 'real')}
-                style={{
-                  border: selectedOption === (currentQ.isRealOnLeft ? 'ai' : 'real') ? '4px solid #6C5CE7' : '2px solid #E2E8F0',
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  position: 'relative',
-                  padding: 0,
-                  background: '#F1F5F9',
-                  cursor: 'pointer',
-                  touchAction: 'manipulation'
-                }}
-              >
-                <img
-                  key={`img_b_${currentQ.id}`}
-                  src={currentQ.isRealOnLeft ? currentQ.ai_image_url : currentQ.real_image_url}
-                  alt="Option B"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
-                />
-                <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.6)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
-                  IMAGE B
-                </span>
-              </button>
+                <button
+                  key={`btn_b_${currentQ.id}`}
+                  disabled={isAnswerSubmitted}
+                  onClick={() => submitAnswer(currentQ.isRealOnLeft ? 'ai' : 'real')}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    border: selectedOption === (currentQ.isRealOnLeft ? 'ai' : 'real') ? '4px solid #6C5CE7' : '2px solid #E2E8F0',
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    padding: 0,
+                    background: '#F1F5F9',
+                    cursor: 'pointer',
+                    touchAction: 'manipulation'
+                  }}
+                >
+                  <img
+                    key={`img_b_${currentQ.id}`}
+                    src={currentQ.isRealOnLeft ? currentQ.ai_image_url : currentQ.real_image_url}
+                    alt="Option B"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
+                  />
+                  <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.65)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
+                    IMAGE B
+                  </span>
+                </button>
+              </div>
             </div>
           )}
 
           {/* ROUND 2: Brand Logo Display (Compact Zero-scroll Centered Layout) */}
           {currentQ.round === 2 && (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.4rem 0' }}>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.15rem 0' }}>
               <div style={{
-                width: '150px',
-                height: '150px',
-                padding: '0.75rem',
+                width: '135px',
+                height: '135px',
+                padding: '0.6rem',
                 background: '#FFFFFF',
-                borderRadius: '24px',
-                boxShadow: '0 8px 24px rgba(108, 92, 231, 0.14), 0 2px 8px rgba(0,0,0,0.05)',
+                borderRadius: '20px',
+                boxShadow: '0 6px 20px rgba(108, 92, 231, 0.14), 0 2px 8px rgba(0,0,0,0.05)',
                 border: '2px solid #EEF2FF',
                 display: 'flex',
                 alignItems: 'center',
@@ -770,8 +776,8 @@ export default function PlayerView() {
 
           {/* ROUND 3: Emoji Clue Display (Single centered responsive display) */}
           {currentQ.round === 3 && (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.4rem 0' }}>
-              <span style={{ fontSize: 'clamp(3.8rem, 14vw, 5rem)', filter: 'drop-shadow(0 6px 16px rgba(0,0,0,0.15))', lineHeight: 1 }}>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.15rem 0' }}>
+              <span style={{ fontSize: 'clamp(3.2rem, 12vw, 4.2rem)', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))', lineHeight: 1 }}>
                 {currentQ.prompt_text}
               </span>
             </div>
@@ -779,7 +785,7 @@ export default function PlayerView() {
 
           {/* Answer Options Grid (Round 2 & 3: 4 Choice Buttons) */}
           {currentQ.round !== 1 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem', marginTop: 'auto', flexShrink: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', flexShrink: 0 }}>
               {currentQ.options.map((optionText, idx) => {
                 const colors = ['#FF7675', '#0984E3', '#FDCB6E', '#00B894'];
                 const optionColor = colors[idx % 4];
@@ -794,11 +800,11 @@ export default function PlayerView() {
                     style={{
                       backgroundColor: optionColor,
                       color: idx === 2 ? '#2D3436' : '#FFFFFF',
-                      fontSize: 'clamp(0.82rem, 3.5vw, 0.92rem)',
+                      fontSize: 'clamp(0.8rem, 3.4vw, 0.9rem)',
                       fontWeight: 800,
-                      padding: '0.5rem 0.3rem',
-                      minHeight: '48px',
-                      borderRadius: '14px',
+                      padding: '0.45rem 0.3rem',
+                      minHeight: '44px',
+                      borderRadius: '12px',
                       opacity: isAnswerSubmitted && !isSelected ? 0.4 : 1,
                       outline: isSelected ? '4px solid #2D3436' : 'none',
                       touchAction: 'manipulation',
@@ -935,11 +941,13 @@ const playerContainerStyle = {
 };
 
 const gameplayContainerStyle = {
-  minHeight: '100vh',
-  maxHeight: '100vh',
+  height: '100dvh',
+  minHeight: '100dvh',
+  maxHeight: '100dvh',
   display: 'flex',
   flexDirection: 'column',
-  padding: 'max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-right))',
+  padding: 'max(0.4rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right)) max(0.4rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left))',
   background: '#FFFFFF',
-  overflow: 'hidden'
+  overflow: 'hidden',
+  boxSizing: 'border-box'
 };
