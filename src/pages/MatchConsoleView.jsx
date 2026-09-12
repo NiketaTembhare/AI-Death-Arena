@@ -222,30 +222,51 @@ export default function MatchConsoleView() {
 
   const lastCelebratedStatusRef = useRef(null);
 
-  const triggerConfettiShower = () => {
-    const palette = ['#FDCB6E', '#6C5CE7', '#A29BFE', '#FD79A8', '#FF7675', '#00B894', '#00CEC9'];
+  const triggerConfettiShower = (isFinal = false) => {
+    // Bold, rich, dark-bright color palette
+    const darkBrightPalette = [
+      '#F59E0B', // Bold Gold / Amber
+      '#7C3AED', // Deep Vivid Purple
+      '#EC4899', // Hot Neon Pink
+      '#06B6D4', // Electric Teal / Cyan
+      '#EF4444', // Bright Ruby Red
+      '#10B981', // Vivid Emerald Green
+      '#F97316', // Deep Orange
+      '#FBBF24'  // Bright Sunflower Yellow
+    ];
 
-    // Wave 1: Immediate wide drop across top of screen
-    const topPositions = [0.12, 0.28, 0.44, 0.6, 0.76, 0.9];
+    // Emojis requested for Final results: 👏🏻👏🏼✨💸🥳🎉🎊🪩
+    let shapesToUse = ['square', 'circle'];
+    if (isFinal && typeof confetti.shapeFromText === 'function') {
+      const emojis = ['👏🏻', '👏🏼', '✨', '💸', '🥳', '🎉', '🎊', '🪩'];
+      const emojiShapes = emojis.map((text) =>
+        confetti.shapeFromText({ text, scalar: 3.2 })
+      );
+      // Mix emojis heavily into the shapes array along with paper strips
+      shapesToUse = ['square', 'square', 'circle', ...emojiShapes, ...emojiShapes];
+    }
+
+    // Wave 1: Immediate dense drop across top of screen (10 spawn positions across x)
+    const topPositions = [0.08, 0.18, 0.28, 0.38, 0.48, 0.58, 0.68, 0.78, 0.88, 0.95];
     topPositions.forEach((x) => {
       confetti({
-        particleCount: 22,
+        particleCount: 30,
         angle: 90,
-        spread: 70,
-        origin: { x, y: -0.05 },
-        colors: palette,
-        shapes: ['square', 'circle'],
-        scalar: Math.random() * 0.7 + 0.7,
-        gravity: Math.random() * 0.5 + 0.6,
-        drift: (Math.random() - 0.5) * 0.8,
-        ticks: 380,
+        spread: 80,
+        origin: { x, y: -0.08 },
+        colors: darkBrightPalette,
+        shapes: shapesToUse,
+        scalar: Math.random() * 1.0 + 1.8, // 1.8 to 2.8 larger size
+        gravity: Math.random() * 0.4 + 0.7, // 0.7 to 1.1 fall speed
+        drift: (Math.random() - 0.5) * 1.0,
+        ticks: 400,
         zIndex: 999999,
         disableForReducedMotion: true
       });
     });
 
-    // Wave 2: Continuous paper-strip shower over 1.8 seconds
-    const end = Date.now() + 1800;
+    // Wave 2: Continuous shower over 2.5 seconds
+    const end = Date.now() + 2500;
     const interval = setInterval(() => {
       if (Date.now() > end) {
         clearInterval(interval);
@@ -253,20 +274,20 @@ export default function MatchConsoleView() {
       }
 
       confetti({
-        particleCount: 15,
+        particleCount: 20,
         angle: 90,
-        spread: 80,
-        origin: { x: Math.random(), y: -0.05 },
-        colors: palette,
-        shapes: ['square', 'circle'],
-        scalar: Math.random() * 0.7 + 0.7,
-        gravity: Math.random() * 0.5 + 0.6,
-        drift: (Math.random() - 0.5) * 1.0,
-        ticks: 380,
+        spread: 90,
+        origin: { x: Math.random(), y: -0.08 },
+        colors: darkBrightPalette,
+        shapes: shapesToUse,
+        scalar: Math.random() * 1.0 + 1.8,
+        gravity: Math.random() * 0.4 + 0.7,
+        drift: (Math.random() - 0.5) * 1.2,
+        ticks: 400,
         zIndex: 999999,
         disableForReducedMotion: true
       });
-    }, 160);
+    }, 140);
   };
 
   // Watch status transitions to trigger celebration confetti shower & audio cues (once per screen transition)
@@ -277,14 +298,15 @@ export default function MatchConsoleView() {
     if (lastCelebratedStatusRef.current === currentStatus) return;
     lastCelebratedStatusRef.current = currentStatus;
 
+    // Explicitly DO NOT trigger celebration on lobby or active round starts (round1, round2, round3)
     if (currentStatus === 'round1_results' || currentStatus === 'round2_results') {
       audioManager.playApplauseClapping(4);
       audioManager.playRoundEnd();
-      triggerConfettiShower();
+      triggerConfettiShower(false);
     } else if (currentStatus === 'final_results') {
       audioManager.playFinalFanfare();
       audioManager.playApplauseClapping(4);
-      triggerConfettiShower();
+      triggerConfettiShower(true); // true = mix emojis (👏🏻👏🏼✨💸🥳🎉🎊🪩) + paper strips!
     }
   }, [match?.status]);
 
