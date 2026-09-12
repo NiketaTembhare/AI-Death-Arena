@@ -211,14 +211,19 @@ export default function MatchConsoleView() {
       audioManager.playRoundEnd();
     } else if (status === 'final_results') {
       audioManager.playFinalFanfare();
+      audioManager.playApplauseClapping(4);
       triggerChampionsCelebration();
     }
   };
 
   const triggerChampionsCelebration = () => {
-    // Delay confetti burst slightly (350ms) so podium pillars scale-pop into place first
+    // Play crowd applause & fanfare
+    audioManager.playFinalFanfare();
+    audioManager.playApplauseClapping(4);
+
+    // Phase 1: Immediate party popper burst from center
     setTimeout(() => {
-      const count = 200;
+      const count = 250;
       const defaults = { origin: { y: 0.6 } };
 
       function fire(particleRatio, opts) {
@@ -235,6 +240,35 @@ export default function MatchConsoleView() {
       fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
       fire(0.1, { spread: 120, startVelocity: 45 });
     }, 350);
+
+    // Phase 2: Party Popper Cannons from Left and Right sides
+    setTimeout(() => {
+      confetti({
+        particleCount: 80,
+        angle: 60,
+        spread: 70,
+        origin: { x: 0, y: 0.75 },
+        colors: ['#FF7675', '#00B894', '#0984E3', '#FDCB6E', '#A29BFE']
+      });
+      confetti({
+        particleCount: 80,
+        angle: 120,
+        spread: 70,
+        origin: { x: 1, y: 0.75 },
+        colors: ['#FF7675', '#00B894', '#0984E3', '#FDCB6E', '#A29BFE']
+      });
+    }, 900);
+
+    // Phase 3: Star Shower burst at 1.8s
+    setTimeout(() => {
+      confetti({
+        particleCount: 60,
+        spread: 100,
+        origin: { y: 0.4 },
+        shapes: ['star'],
+        colors: ['#FDCB6E', '#F1C40F', '#E67E22', '#FFFFFF']
+      });
+    }, 1800);
   };
 
   // State A action: Start New Match (auto-archive non-final active matches)

@@ -158,6 +158,8 @@ export default function PlayerView() {
     } else if (match.status === 'final_results') {
       const todayStr = new Date().toISOString().split('T')[0];
       localStorage.setItem('arena_completed_date', todayStr);
+      audioManager.playFinalFanfare();
+      audioManager.playApplauseClapping(3);
     }
   }, [match?.status, match?.round_started_at, player?.id]);
 

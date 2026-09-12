@@ -114,6 +114,52 @@ class AudioManager {
       setTimeout(() => this.playBeep(freq, 'triangle', 0.4, 0.45), i * 140);
     });
   }
+
+  playApplauseClapping(durationSec = 3.5) {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    try {
+      const now = this.ctx.currentTime;
+      const totalClaps = Math.floor(durationSec * 35); // ~35 claps per second from crowd
+
+      // Generate a short 0.05s noise buffer for single clap snap
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.06);
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
+      }
+
+      for (let i = 0; i < totalClaps; i++) {
+        const clapTime = now + (Math.random() * durationSec);
+        
+        const whiteNoise = this.ctx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+
+        // Bandpass filter for natural palm clap frequency
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1000 + Math.random() * 1800; // 1000Hz - 2800Hz
+        filter.Q.value = 1.2;
+
+        const gain = this.ctx.createGain();
+        const clapVolume = 0.08 + Math.random() * 0.22;
+        gain.gain.setValueAtTime(clapVolume, clapTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, clapTime + 0.05);
+
+        whiteNoise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        whiteNoise.start(clapTime);
+        whiteNoise.stop(clapTime + 0.06);
+      }
+    } catch (e) {
+      console.warn('Error synthesizing applause sound:', e);
+    }
+  }
 }
 
 export const audioManager = new AudioManager();
