@@ -641,12 +641,12 @@ export default function PlayerView() {
         </header>
 
         {/* Question Title & Prompt */}
-        <div style={{ textAlign: 'center', marginBottom: '0.4rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '0.3rem' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
             ROUND {currentQ.round} — {currentQ.round === 1 ? 'REAL OR FAKE?' : currentQ.round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
           </span>
-          <h2 style={{ fontSize: '1.1rem', color: '#2D3436', marginTop: '0.1rem', lineHeight: '1.2' }}>
-            {currentQ.prompt_text}
+          <h2 style={{ fontSize: '1.05rem', color: '#2D3436', marginTop: '0.1rem', lineHeight: '1.2' }}>
+            {currentQ.round === 3 ? 'Which AI concept or tool do these emojis represent?' : currentQ.prompt_text}
           </h2>
         </div>
 
@@ -656,36 +656,36 @@ export default function PlayerView() {
             background: answerResult.isCorrect ? '#E6FFFA' : '#FFF5F5',
             border: `2px solid ${answerResult.isCorrect ? '#38B2AC' : '#E53E3E'}`,
             borderRadius: '12px',
-            padding: '0.5rem 0.75rem',
+            padding: '0.4rem 0.65rem',
             textAlign: 'center',
-            marginBottom: '0.5rem',
+            marginBottom: '0.35rem',
             animation: 'fadeIn 0.2s ease'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.1rem' }}>
               {answerResult.isCorrect ? (
                 <>
-                  <CheckCircle2 color="#38B2AC" size={20} />
-                  <strong style={{ color: '#2C7A7B', fontSize: '1rem' }}>CORRECT! +{answerResult.points} pts</strong>
+                  <CheckCircle2 color="#38B2AC" size={18} />
+                  <strong style={{ color: '#2C7A7B', fontSize: '0.95rem' }}>CORRECT! +{answerResult.points} pts</strong>
                 </>
               ) : (
                 <>
-                  <XCircle color="#E53E3E" size={20} />
-                  <strong style={{ color: '#C53030', fontSize: '1rem' }}>INCORRECT</strong>
+                  <XCircle color="#E53E3E" size={18} />
+                  <strong style={{ color: '#C53030', fontSize: '0.95rem' }}>INCORRECT</strong>
                 </>
               )}
             </div>
-            <p style={{ color: '#4A5568', fontSize: '0.8rem', margin: 0 }}>
+            <p style={{ color: '#4A5568', fontSize: '0.78rem', margin: 0 }}>
               {answerResult.explanation}
             </p>
           </div>
         )}
 
         {/* Content Area (Round 1 Images vs Round 2 Logo vs Round 3 Emoji) */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', marginBottom: '0.5rem' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
 
           {/* ROUND 1: Two Images Side by Side */}
           {currentQ.round === 1 && (
-            <div key={`r1_${currentQ.id}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', height: '170px' }}>
+            <div key={`r1_${currentQ.id}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', height: '160px' }}>
               <button
                 key={`btn_a_${currentQ.id}`}
                 disabled={isAnswerSubmitted}
@@ -740,17 +740,17 @@ export default function PlayerView() {
             </div>
           )}
 
-          {/* ROUND 2: Brand Logo Display (Larger 140px card & visually centered) */}
+          {/* ROUND 2: Brand Logo Display (Zero-scroll compact centered layout) */}
           {currentQ.round === 2 && (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.75rem 0' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0' }}>
               <div style={{
-                width: '140px',
-                height: '140px',
+                width: '110px',
+                height: '110px',
                 margin: '0 auto',
-                padding: '1rem',
+                padding: '0.65rem',
                 background: '#FFFFFF',
-                borderRadius: '24px',
-                boxShadow: '0 12px 28px rgba(108, 92, 231, 0.16), 0 4px 12px rgba(0,0,0,0.06)',
+                borderRadius: '20px',
+                boxShadow: '0 8px 20px rgba(108, 92, 231, 0.14), 0 2px 8px rgba(0,0,0,0.06)',
                 border: '2px solid #EEF2FF',
                 display: 'flex',
                 alignItems: 'center',
@@ -766,10 +766,10 @@ export default function PlayerView() {
             </div>
           )}
 
-          {/* ROUND 3: Emoji Clue Display */}
+          {/* ROUND 3: Emoji Clue Display (Single centered 3.5rem display) */}
           {currentQ.round === 3 && (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.75rem 0' }}>
-              <span style={{ fontSize: '4rem', filter: 'drop-shadow(0 6px 16px rgba(0,0,0,0.18))' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0' }}>
+              <span style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}>
                 {currentQ.prompt_text}
               </span>
             </div>
@@ -777,7 +777,7 @@ export default function PlayerView() {
 
           {/* Answer Options Grid (Round 2 & 3: 4 Choice Buttons) */}
           {currentQ.round !== 1 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: 'auto' }}>
               {currentQ.options.map((optionText, idx) => {
                 const colors = ['#FF7675', '#0984E3', '#FDCB6E', '#00B894'];
                 const optionColor = colors[idx % 4];
@@ -792,9 +792,10 @@ export default function PlayerView() {
                     style={{
                       backgroundColor: optionColor,
                       color: idx === 2 ? '#2D3436' : '#FFFFFF',
-                      fontSize: '0.95rem',
-                      padding: '0.6rem 0.4rem',
-                      minHeight: '48px',
+                      fontSize: '0.9rem',
+                      fontWeight: 800,
+                      padding: '0.45rem 0.3rem',
+                      minHeight: '44px',
                       borderRadius: '12px',
                       opacity: isAnswerSubmitted && !isSelected ? 0.4 : 1,
                       outline: isSelected ? '4px solid #2D3436' : 'none'
