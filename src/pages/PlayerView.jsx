@@ -203,23 +203,8 @@ export default function PlayerView() {
 
     if (data && data.length > 0) {
       const formattedQ = data.map((item) => {
-        const q = Array.isArray(item.questions) ? item.questions[0] : item.questions;
-        if (!q) return null;
-
-        // Issue 1 Fix: Deterministic placement for real image based on question ID hash
-        let hash = 0;
-        const qIdStr = String(q.id || '');
-        for (let k = 0; k < qIdStr.length; k++) {
-          hash = (hash << 5) - hash + qIdStr.charCodeAt(k);
-          hash |= 0;
-        }
-        let isRealOnLeft = Math.abs(hash) % 2 === 0;
-
-        // Preload Round 1 images into browser cache to prevent rendering lag
-        if (q.round === 1) {
-          if (q.real_image_url) { const img1 = new Image(); img1.src = q.real_image_url; }
-          if (q.ai_image_url) { const img2 = new Image(); img2.src = q.ai_image_url; }
-        }
+        const q = item.questions;
+        let isRealOnLeft = Math.random() > 0.5;
 
         const rawOptions = q.options ? (typeof q.options === 'string' ? JSON.parse(q.options) : q.options) : [];
         const shuffledOptions = [...rawOptions];
@@ -241,7 +226,7 @@ export default function PlayerView() {
           correct_option: q.correct_option,
           explanation: q.explanation
         };
-      }).filter(Boolean);
+      });
 
       const { data: answeredRows } = await supabase
         .from('match_answers')
@@ -584,7 +569,7 @@ export default function PlayerView() {
     const avatar = getPlayerAvatar(player.display_name);
 
     return (
-      <div style={gameplayContainerStyle}>
+      <div key={currentQ.id} style={gameplayContainerStyle}>
         {/* Mobile Top Header Bar */}
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -649,7 +634,7 @@ export default function PlayerView() {
 
           {/* ROUND 1: Two Images Side by Side */}
           {currentQ.round === 1 && (
-            <div key={`round1_grid_${currentQ.id}_${currentQIndex}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', height: '170px' }}>
+            <div key={`r1_${currentQ.id}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', height: '170px' }}>
               <button
                 key={`btn_a_${currentQ.id}`}
                 disabled={isAnswerSubmitted}
@@ -665,7 +650,7 @@ export default function PlayerView() {
                 }}
               >
                 <img
-                  key={`img_a_${currentQ.id}_${currentQ.isRealOnLeft ? 'real' : 'ai'}`}
+                  key={`img_a_${currentQ.id}`}
                   src={currentQ.isRealOnLeft ? currentQ.real_image_url : currentQ.ai_image_url}
                   alt="Option A"
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -691,7 +676,7 @@ export default function PlayerView() {
                 }}
               >
                 <img
-                  key={`img_b_${currentQ.id}_${currentQ.isRealOnLeft ? 'ai' : 'real'}`}
+                  key={`img_b_${currentQ.id}`}
                   src={currentQ.isRealOnLeft ? currentQ.ai_image_url : currentQ.real_image_url}
                   alt="Option B"
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
