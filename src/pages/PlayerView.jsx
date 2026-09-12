@@ -5,6 +5,7 @@ import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
 import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
+import EmojiRain from '../components/EmojiRain';
 
 export default function PlayerView() {
   const navigate = useNavigate();
@@ -38,7 +39,9 @@ export default function PlayerView() {
   const [timeLeftSec, setTimeLeftSec] = useState(15);
   const questionStartTimeRef = useRef(Date.now());
   const timerIntervalRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
   const lastBeepedRef = useRef(null);
+  const lastCountdownRoundRef = useRef(null);
 
   // 1. Initialize Device Token
   useEffect(() => {
@@ -54,6 +57,15 @@ export default function PlayerView() {
     if (completedToday === todayStr) {
       setIsRepeatPlayer(true);
     }
+
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
   }, []);
 
   // 2. Fetch Match by Room Code & Re-hydrate player
@@ -154,7 +166,7 @@ export default function PlayerView() {
 
     if (match.status === 'round1' || match.status === 'round2' || match.status === 'round3') {
       fetchPlayerQuestions(match.id, player.id, match.current_round);
-      handleSynchronizedCountdown(match.round_started_at);
+      handleSynchronizedCountdown(match.round_started_at, match.current_round);
     } else if (match.status === 'final_results') {
       const todayStr = new Date().toISOString().split('T')[0];
       localStorage.setItem('arena_completed_date', todayStr);
@@ -163,33 +175,59 @@ export default function PlayerView() {
     }
   }, [match?.status, match?.round_started_at, player?.id]);
 
-  const handleSynchronizedCountdown = (startedAtIso) => {
-    if (!startedAtIso) return;
-    const targetMs = new Date(startedAtIso).getTime();
+  const handleSynchronizedCountdown = (startedAtIso, roundNum) => {
+    // Avoid double countdowns for the exact same round
+    const roundKey = `${roundNum}_${startedAtIso || ''}`;
+    if (lastCountdownRoundRef.current === roundKey) return;
+    lastCountdownRoundRef.current = roundKey;
+
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
     lastBeepedRef.current = null;
 
-    const interval = setInterval(() => {
-      const nowMs = Date.now();
-      const diffSec = Math.max(0, Math.ceil((targetMs - nowMs) / 1000));
+    let targetMs = startedAtIso ? new Date(startedAtIso).getTime() : Date.now() + 3500;
+    const nowMs = Date.now();
+    let remaining = targetMs - nowMs;
 
-      if (diffSec > 0) {
-        setCountdownNum(diffSec);
-        if (lastBeepedRef.current !== diffSec) {
-          lastBeepedRef.current = diffSec;
-          audioManager.playCountdownBeep(diffSec);
-        }
-      } else if (diffSec === 0 && (nowMs - targetMs) < 900) {
-        setCountdownNum(0);
-        if (lastBeepedRef.current !== 0) {
-          lastBeepedRef.current = 0;
-          audioManager.playCountdownBeep(0);
+    // Fallback: If network latency or clock skew caused targetMs to be in the past or far future,
+    // guarantee a smooth local 3.2-second GET READY countdown for the player!
+    if (remaining <= 500 || remaining > 8000) {
+      targetMs = Date.now() + 3200;
+    }
+
+    countdownIntervalRef.current = setInterval(() => {
+      const currentNow = Date.now();
+      const remainingMs = targetMs - currentNow;
+
+      let currentStep = null;
+      if (remainingMs > 2200) {
+        currentStep = 3;
+      } else if (remainingMs > 1200) {
+        currentStep = 2;
+      } else if (remainingMs > 200) {
+        currentStep = 1;
+      } else if (remainingMs > -600) {
+        currentStep = 0; // GO!
+      } else {
+        currentStep = null;
+      }
+
+      if (currentStep !== null) {
+        setCountdownNum(currentStep);
+        if (lastBeepedRef.current !== currentStep) {
+          lastBeepedRef.current = currentStep;
+          audioManager.playCountdownBeep(currentStep);
         }
       } else {
         setCountdownNum(null);
-        clearInterval(interval);
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
         startPerQuestionTimer(15);
       }
-    }, 100);
+    }, 40);
   };
 
   const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {
@@ -254,6 +292,7 @@ export default function PlayerView() {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     questionStartTimeRef.current = Date.now();
     const targetEndMs = Date.now() + durationSec * 1000;
+    let lastUrgencySec = null;
 
     setTimeLeftSec(durationSec);
 
@@ -263,15 +302,27 @@ export default function PlayerView() {
 
       setTimeLeftSec(remainingSec);
 
+      // Play rising urgency warning tick on the last 5 seconds (5, 4, 3, 2, 1)
+      if (remainingSec <= 5 && remainingSec > 0 && lastUrgencySec !== remainingSec) {
+        lastUrgencySec = remainingSec;
+        audioManager.playUrgencyTick(remainingSec);
+      }
+
       if (remainingMs <= 0) {
         clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
         handleTimeoutOrAutoAdvance();
       }
-    }, 200);
+    }, 150);
   };
 
   const submitAnswer = async (chosenOption) => {
     if (isAnswerSubmitted || !match || !player || !questions[currentQIndex]) return;
+
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
 
     setIsAnswerSubmitted(true);
     setSelectedOption(chosenOption);
@@ -590,12 +641,12 @@ export default function PlayerView() {
         </header>
 
         {/* Question Title & Prompt */}
-        <div style={{ textAlign: 'center', marginBottom: '0.4rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '0.3rem' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
             ROUND {currentQ.round} — {currentQ.round === 1 ? 'REAL OR FAKE?' : currentQ.round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
           </span>
-          <h2 style={{ fontSize: '1.1rem', color: '#2D3436', marginTop: '0.1rem', lineHeight: '1.2' }}>
-            {currentQ.prompt_text}
+          <h2 style={{ fontSize: '1.05rem', color: '#2D3436', marginTop: '0.1rem', lineHeight: '1.2' }}>
+            {currentQ.round === 3 ? 'Which AI concept or tool do these emojis represent?' : currentQ.prompt_text}
           </h2>
         </div>
 
@@ -605,36 +656,36 @@ export default function PlayerView() {
             background: answerResult.isCorrect ? '#E6FFFA' : '#FFF5F5',
             border: `2px solid ${answerResult.isCorrect ? '#38B2AC' : '#E53E3E'}`,
             borderRadius: '12px',
-            padding: '0.5rem 0.75rem',
+            padding: '0.4rem 0.65rem',
             textAlign: 'center',
-            marginBottom: '0.5rem',
+            marginBottom: '0.35rem',
             animation: 'fadeIn 0.2s ease'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.1rem' }}>
               {answerResult.isCorrect ? (
                 <>
-                  <CheckCircle2 color="#38B2AC" size={20} />
-                  <strong style={{ color: '#2C7A7B', fontSize: '1rem' }}>CORRECT! +{answerResult.points} pts</strong>
+                  <CheckCircle2 color="#38B2AC" size={18} />
+                  <strong style={{ color: '#2C7A7B', fontSize: '0.95rem' }}>CORRECT! +{answerResult.points} pts</strong>
                 </>
               ) : (
                 <>
-                  <XCircle color="#E53E3E" size={20} />
-                  <strong style={{ color: '#C53030', fontSize: '1rem' }}>INCORRECT</strong>
+                  <XCircle color="#E53E3E" size={18} />
+                  <strong style={{ color: '#C53030', fontSize: '0.95rem' }}>INCORRECT</strong>
                 </>
               )}
             </div>
-            <p style={{ color: '#4A5568', fontSize: '0.8rem', margin: 0 }}>
+            <p style={{ color: '#4A5568', fontSize: '0.78rem', margin: 0 }}>
               {answerResult.explanation}
             </p>
           </div>
         )}
 
         {/* Content Area (Round 1 Images vs Round 2 Logo vs Round 3 Emoji) */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', marginBottom: '0.5rem' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
 
           {/* ROUND 1: Two Images Side by Side */}
           {currentQ.round === 1 && (
-            <div key={`r1_${currentQ.id}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', height: '170px' }}>
+            <div key={`r1_${currentQ.id}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', height: '160px' }}>
               <button
                 key={`btn_a_${currentQ.id}`}
                 disabled={isAnswerSubmitted}
@@ -689,10 +740,22 @@ export default function PlayerView() {
             </div>
           )}
 
-          {/* ROUND 2: Brand Logo Display */}
+          {/* ROUND 2: Brand Logo Display (Zero-scroll compact centered layout) */}
           {currentQ.round === 2 && (
-            <div style={{ textAlign: 'center', margin: '0.25rem 0' }}>
-              <div style={{ width: '140px', height: '140px', margin: '0 auto', padding: '0.75rem', background: '#FFFFFF', borderRadius: '20px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0' }}>
+              <div style={{
+                width: '140px',
+                height: '140px',
+                margin: '0 auto',
+                padding: '0.65rem',
+                background: '#FFFFFF',
+                borderRadius: '20px',
+                boxShadow: '0 8px 20px rgba(108, 92, 231, 0.14), 0 2px 8px rgba(0,0,0,0.06)',
+                border: '2px solid #EEF2FF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
                 <img
                   src={currentQ.logo_url}
                   alt="Brand Logo"
@@ -703,10 +766,10 @@ export default function PlayerView() {
             </div>
           )}
 
-          {/* ROUND 3: Emoji Clue Display */}
+          {/* ROUND 3: Emoji Clue Display (Single centered 3.5rem display) */}
           {currentQ.round === 3 && (
-            <div style={{ textAlign: 'center', margin: '0.5rem 0' }}>
-              <span style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.15))' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0' }}>
+              <span style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}>
                 {currentQ.prompt_text}
               </span>
             </div>
@@ -714,7 +777,7 @@ export default function PlayerView() {
 
           {/* Answer Options Grid (Round 2 & 3: 4 Choice Buttons) */}
           {currentQ.round !== 1 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: 'auto' }}>
               {currentQ.options.map((optionText, idx) => {
                 const colors = ['#FF7675', '#0984E3', '#FDCB6E', '#00B894'];
                 const optionColor = colors[idx % 4];
@@ -729,9 +792,10 @@ export default function PlayerView() {
                     style={{
                       backgroundColor: optionColor,
                       color: idx === 2 ? '#2D3436' : '#FFFFFF',
-                      fontSize: '0.95rem',
-                      padding: '0.6rem 0.4rem',
-                      minHeight: '48px',
+                      fontSize: '0.9rem',
+                      fontWeight: 800,
+                      padding: '0.45rem 0.3rem',
+                      minHeight: '44px',
                       borderRadius: '12px',
                       opacity: isAnswerSubmitted && !isSelected ? 0.4 : 1,
                       outline: isSelected ? '4px solid #2D3436' : 'none'
@@ -752,10 +816,13 @@ export default function PlayerView() {
   if (match?.status === 'round1_results' || match?.status === 'round2_results' || isFinishedRoundQuestions) {
     const roundNum = match.current_round || (match.status === 'round1_results' ? 1 : 2);
     const avatar = getPlayerAvatar(player.display_name);
+    const isFinalOrRound3 = match?.status === 'final_results' || (isFinishedRoundQuestions && roundNum === 3);
+    const isTop3Winner = isFinalOrRound3 && (playerRank === 1 || playerRank === 2 || playerRank === 3);
 
     return (
       <div style={playerContainerStyle}>
-        <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
+        {isTop3Winner && <EmojiRain count={38} />}
+        <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <div className="avatar-badge" style={{ background: avatar.bgColor, width: '64px', height: '64px', fontSize: '2rem', margin: '0 auto 0.75rem' }}>
             {avatar.emoji}
           </div>
@@ -780,8 +847,17 @@ export default function PlayerView() {
             <strong style={{ fontSize: '2rem', color: '#6C5CE7' }}>{playerScore} pts</strong>
             {playerRank && (
               <div style={{ marginTop: '0.4rem' }}>
-                <span style={{ background: '#FEFCBF', color: '#744210', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 800, fontSize: '0.85rem' }}>
-                  ARENA RANK #{playerRank}
+                <span style={{
+                  background: playerRank === 1 ? '#FEFCBF' : playerRank === 2 ? '#E2E8F0' : playerRank === 3 ? '#FED7D7' : '#FEFCBF',
+                  color: playerRank === 1 ? '#744210' : playerRank === 2 ? '#1E293B' : playerRank === 3 ? '#991B1B' : '#744210',
+                  border: `1px solid ${playerRank === 1 ? '#F6E05E' : playerRank === 2 ? '#CBD5E1' : playerRank === 3 ? '#FEB2B2' : '#F6E05E'}`,
+                  padding: '0.35rem 0.85rem',
+                  borderRadius: '12px',
+                  fontWeight: 800,
+                  fontSize: '0.9rem',
+                  display: 'inline-block'
+                }}>
+                  {playerRank === 1 ? '👑 ARENA RANK #1 (CHAMPION!)' : playerRank === 2 ? '🥈 ARENA RANK #2 (RUNNER UP!)' : playerRank === 3 ? '🥉 ARENA RANK #3 (PODIUM!)' : `ARENA RANK #${playerRank}`}
                 </span>
               </div>
             )}
@@ -798,9 +874,12 @@ export default function PlayerView() {
   }
 
   // 5. AFTER ROUND 3 / FINAL MATCH COMPLETE SCREEN
+  const isTop3Winner = playerRank === 1 || playerRank === 2 || playerRank === 3;
+
   return (
     <div style={playerContainerStyle}>
-      <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
+      {isTop3Winner && <EmojiRain count={38} />}
+      <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center', position: 'relative', zIndex: 10 }}>
         <Award size={56} color="#FDCB6E" style={{ margin: '0 auto 0.5rem' }} />
         <h2 style={{ fontSize: '2rem' }}>MATCH COMPLETE</h2>
         <p style={{ color: '#636E72', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
@@ -813,8 +892,17 @@ export default function PlayerView() {
 
           {playerRank && (
             <div style={{ marginTop: '0.5rem' }}>
-              <span style={{ background: '#FEFCBF', color: '#744210', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 800, fontSize: '0.95rem' }}>
-                FINAL RANK #{playerRank}
+              <span style={{
+                background: playerRank === 1 ? '#FEFCBF' : playerRank === 2 ? '#E2E8F0' : playerRank === 3 ? '#FED7D7' : '#FEFCBF',
+                color: playerRank === 1 ? '#744210' : playerRank === 2 ? '#1E293B' : playerRank === 3 ? '#991B1B' : '#744210',
+                border: `1px solid ${playerRank === 1 ? '#F6E05E' : playerRank === 2 ? '#CBD5E1' : playerRank === 3 ? '#FEB2B2' : '#F6E05E'}`,
+                padding: '0.4rem 1rem',
+                borderRadius: '12px',
+                fontWeight: 900,
+                fontSize: '1rem',
+                display: 'inline-block'
+              }}>
+                {playerRank === 1 ? '👑 FINAL RANK #1 (CHAMPION!)' : playerRank === 2 ? '🥈 FINAL RANK #2 (RUNNER UP!)' : playerRank === 3 ? '🥉 FINAL RANK #3 (PODIUM!)' : `FINAL RANK #${playerRank}`}
               </span>
             </div>
           )}

@@ -1,4 +1,4 @@
-// Web Audio API Synthesizer Sound Engine for AI-DEATH ARENA
+// Web Audio API Synthesizer Sound Engine & Web Speech AI Voice for AI-DEATH ARENA
 class AudioManager {
   constructor() {
     this.ctx = null;
@@ -6,6 +6,9 @@ class AudioManager {
     this.listeners = new Set();
     this.setupGlobalUnlock();
     this.setupVisibilityHandler();
+    this.voices = [];
+    this.selectedVoice = null;
+    this.initSpeech();
   }
 
   // Pre-unlock AudioContext on the first user interaction anywhere on page
@@ -40,6 +43,42 @@ class AudioManager {
     });
   }
 
+  initSpeech() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const loadVoices = () => {
+        try {
+          this.voices = window.speechSynthesis.getVoices() || [];
+          if (this.voices.length > 0) {
+            // Pick a high-quality natural sounding English voice
+            const preferred = this.voices.find(v =>
+              v.lang.startsWith('en') && (
+                v.name.includes('Google') ||
+                v.name.includes('Natural') ||
+                v.name.includes('Samantha') ||
+                v.name.includes('Jenny') ||
+                v.name.includes('Guy') ||
+                v.name.includes('Aria') ||
+                v.name.includes('Zira') ||
+                v.name.includes('David') ||
+                v.name.includes('Alex') ||
+                v.name.includes('Daniel')
+              )
+            );
+            const englishFallback = this.voices.find(v => v.lang.startsWith('en'));
+            this.selectedVoice = preferred || englishFallback || this.voices[0] || null;
+          }
+        } catch (e) {
+          console.warn('Speech synthesis voice load error', e);
+        }
+      };
+
+      loadVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+      }
+    }
+  }
+
   initContext() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -50,12 +89,22 @@ class AudioManager {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
   }
 
   toggleMute() {
     this.initContext();
     this.isMuted = !this.isMuted;
     localStorage.setItem('arena_sound_muted', this.isMuted ? 'true' : 'false');
+    if (this.isMuted && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        // ignore
+      }
+    }
     this.notify();
     return this.isMuted;
   }
@@ -67,6 +116,59 @@ class AudioManager {
 
   notify() {
     this.listeners.forEach((fn) => fn(this.isMuted));
+  }
+
+  speakVoice(text, options = {}) {
+    if (this.isMuted) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    try {
+      // Cancel previous speech to prevent overlapping or queuing delay
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      if (this.selectedVoice) {
+        utterance.voice = this.selectedVoice;
+      } else {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices && voices.length > 0) {
+          const fallback = voices.find(v => v.lang.startsWith('en')) || voices[0];
+          utterance.voice = fallback;
+          this.selectedVoice = fallback;
+        }
+      }
+
+      utterance.rate = options.rate !== undefined ? options.rate : 1.0;
+      utterance.pitch = options.pitch !== undefined ? options.pitch : 1.0;
+      utterance.volume = options.volume !== undefined ? options.volume : 1.0;
+
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Speech synthesis speak error:', e);
+    }
+  }
+
+  speakCountdown(number) {
+    if (this.isMuted) return;
+    const words = {
+      3: 'Three!',
+      2: 'Two!',
+      1: 'One!',
+      0: 'Go!'
+    };
+    const word = words[number];
+    if (word) {
+      this.speakVoice(word, {
+        rate: 1.0,
+        pitch: number === 0 ? 1.2 : 1.05,
+        volume: 1.0
+      });
+    }
   }
 
   playBeep(freq = 440, type = 'sine', duration = 0.15, gainVal = 0.3) {
@@ -95,7 +197,7 @@ class AudioManager {
     if (this.isMuted) return;
     this.initContext();
     if (number > 0) {
-      // Clear, musical rising chime for numbers 4, 3, 2, 1
+      // Clear, musical rising chime for numbers 3, 2, 1
       const pitches = { 4: 440, 3: 523.25, 2: 659.25, 1: 783.99 };
       const freq = pitches[number] || 523.25;
       this.playBeep(freq, 'sine', 0.22, 0.5);
@@ -104,6 +206,8 @@ class AudioManager {
       this.playBeep(1046.5, 'triangle', 0.35, 0.65);
       setTimeout(() => this.playBeep(1318.51, 'sine', 0.3, 0.55), 80);
     }
+    // Synchronized AI voice announcement
+    this.speakCountdown(number);
   }
 
   playCorrect() {
@@ -192,6 +296,105 @@ class AudioManager {
       }
     } catch (e) {
       console.warn('Error synthesizing applause sound:', e);
+    }
+  }
+
+  // 1. 5-Second Urgency Warning Tick (rising tension pulse)
+  playUrgencyTick(secondsRemaining = 5) {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const pitches = { 5: 600, 4: 720, 3: 880, 2: 1080, 1: 1320 };
+    const freq = pitches[secondsRemaining] || 880;
+    this.playBeep(freq, 'triangle', 0.08, 0.4);
+
+    // Double pulse for the final 1 second for extra urgency
+    if (secondsRemaining === 1) {
+      setTimeout(() => this.playBeep(1480, 'sine', 0.07, 0.45), 140);
+    }
+  }
+
+  // 2. New Player Joined Lobby Chime (bright welcoming power-up)
+  playPlayerJoined() {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const notes = [523.25, 783.99, 1046.5]; // C5 -> G5 -> C6
+    notes.forEach((freq, i) => {
+      setTimeout(() => this.playBeep(freq, 'sine', 0.14, 0.35), i * 90);
+    });
+  }
+
+  // 3. Dramatic Snare Drumroll for Round Results Reveal
+  playDrumroll(durationSec = 1.4) {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    try {
+      const now = this.ctx.currentTime;
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.04);
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+      }
+
+      // Snare roll pulses accelerating with crescendo
+      const pulseCount = 28;
+      for (let i = 0; i < pulseCount; i++) {
+        const progress = i / pulseCount;
+        const hitTime = now + (progress * durationSec);
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1800 + progress * 800; // 1800Hz -> 2600Hz
+        filter.Q.value = 1.5;
+
+        const gain = this.ctx.createGain();
+        const volume = 0.06 + Math.pow(progress, 1.8) * 0.4;
+        gain.gain.setValueAtTime(volume, hitTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, hitTime + 0.04);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        noise.start(hitTime);
+        noise.stop(hitTime + 0.04);
+      }
+
+      // Final punch hit at the end of drumroll
+      const finishTime = now + durationSec;
+      setTimeout(() => {
+        if (this.isMuted || !this.ctx) return;
+        // Low bass punch
+        try {
+          const kickOsc = this.ctx.createOscillator();
+          const kickGain = this.ctx.createGain();
+          kickOsc.frequency.setValueAtTime(140, this.ctx.currentTime);
+          kickOsc.frequency.exponentialRampToValueAtTime(35, this.ctx.currentTime + 0.3);
+          kickGain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+          kickGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
+
+          kickOsc.connect(kickGain);
+          kickGain.connect(this.ctx.destination);
+          kickOsc.start();
+          kickOsc.stop(this.ctx.currentTime + 0.3);
+
+          // Cymbal shimmer hit
+          this.playBeep(1200, 'triangle', 0.35, 0.4);
+        } catch (e) {
+          // ignore
+        }
+      }, durationSec * 1000);
+    } catch (e) {
+      console.warn('Error synthesizing drumroll:', e);
     }
   }
 }
