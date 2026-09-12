@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import confetti from 'canvas-confetti';
 import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
@@ -83,6 +84,22 @@ export default function MatchConsoleView() {
     const activePlayers = playerRows.filter((p) => !p.has_left);
     setPlayers(activePlayers);
 
+    // Fetch assigned questions count per player for the current round
+    let assignedCountMap = {};
+    if (currentRound && Number(currentRound) > 0) {
+      const { data: assignedRows } = await supabase
+        .from('match_round_questions')
+        .select('player_id, round')
+        .eq('match_id', matchId)
+        .eq('round', Number(currentRound));
+
+      if (assignedRows) {
+        assignedRows.forEach((r) => {
+          assignedCountMap[r.player_id] = (assignedCountMap[r.player_id] || 0) + 1;
+        });
+      }
+    }
+
     // Fetch submitted answers
     const { data: answerRows } = await supabase
       .from('match_answers')
@@ -111,7 +128,9 @@ export default function MatchConsoleView() {
         ? pAnswers.filter((a) => Number(a.round) === Number(currentRound)).length 
         : 0;
 
-      if (!p.has_left && roundAnswersCount >= 5) {
+      const targetRoundCount = assignedCountMap[p.id] || 5;
+
+      if (!p.has_left && roundAnswersCount > 0 && roundAnswersCount >= targetRoundCount) {
         donePlayersCount++;
       }
 
@@ -189,7 +208,27 @@ export default function MatchConsoleView() {
       audioManager.playRoundEnd();
     } else if (status === 'final_results') {
       audioManager.playFinalFanfare();
+      triggerChampionsCelebration();
     }
+  };
+
+  const triggerChampionsCelebration = () => {
+    const count = 200;
+    const defaults = { origin: { y: 0.6 } };
+
+    function fire(particleRatio, opts) {
+      confetti({
+        ...defaults,
+        ...opts,
+        particleCount: Math.floor(count * particleRatio)
+      });
+    }
+
+    fire(0.25, { spread: 26, startVelocity: 55 });
+    fire(0.2, { spread: 60 });
+    fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+    fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+    fire(0.1, { spread: 120, startVelocity: 45 });
   };
 
   // State A action: Start New Match (auto-archive non-final active matches)
@@ -667,7 +706,7 @@ export default function MatchConsoleView() {
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: '1.5rem', marginBottom: '2rem' }}>
               {/* 2nd Place */}
               {leaderboard[1] && (
-                <div style={{ textAlign: 'center', flex: 1, maxWidth: '200px' }}>
+                <div className="podium-pillar-2" style={{ textAlign: 'center', flex: 1, maxWidth: '200px' }}>
                   <div className="avatar-badge" style={{ background: getPlayerAvatar(leaderboard[1].display_name).bgColor, margin: '0 auto 0.5rem', width: '56px', height: '56px', fontSize: '1.8rem' }}>
                     {getPlayerAvatar(leaderboard[1].display_name).emoji}
                   </div>
@@ -681,7 +720,7 @@ export default function MatchConsoleView() {
 
               {/* 1st Place */}
               {leaderboard[0] && (
-                <div style={{ textAlign: 'center', flex: 1, maxWidth: '220px' }}>
+                <div className="podium-pillar-1" style={{ textAlign: 'center', flex: 1, maxWidth: '220px' }}>
                   <Crown size={32} color="#FDCB6E" style={{ margin: '0 auto 0.25rem' }} />
                   <div className="avatar-badge" style={{ background: getPlayerAvatar(leaderboard[0].display_name).bgColor, margin: '0 auto 0.5rem', width: '70px', height: '70px', fontSize: '2.2rem', boxShadow: '0 0 20px rgba(253, 203, 110, 0.6)' }}>
                     {getPlayerAvatar(leaderboard[0].display_name).emoji}
@@ -696,7 +735,7 @@ export default function MatchConsoleView() {
 
               {/* 3rd Place */}
               {leaderboard[2] && (
-                <div style={{ textAlign: 'center', flex: 1, maxWidth: '200px' }}>
+                <div className="podium-pillar-3" style={{ textAlign: 'center', flex: 1, maxWidth: '200px' }}>
                   <div className="avatar-badge" style={{ background: getPlayerAvatar(leaderboard[2].display_name).bgColor, margin: '0 auto 0.5rem', width: '56px', height: '56px', fontSize: '1.8rem' }}>
                     {getPlayerAvatar(leaderboard[2].display_name).emoji}
                   </div>

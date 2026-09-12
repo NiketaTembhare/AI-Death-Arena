@@ -235,3 +235,23 @@ h1, h2, h3, h4 {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Festive Podium Scale-Pop Reveal Animations */
+@keyframes podiumPop {
+  0% { transform: scale(0.4) translateY(60px); opacity: 0; }
+  70% { transform: scale(1.08) translateY(-10px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.podium-pillar-1 {
+  animation: podiumPop 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.4s both;
+}
+
+.podium-pillar-2 {
+  animation: podiumPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.1s both;
+}
+
+.podium-pillar-3 {
+  animation: podiumPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.25s both;
+}
+
