@@ -380,10 +380,10 @@ export default function PlayerView() {
   const handleLeaveMatch = async () => {
     if (!player) return;
     try {
-      await supabase.from('match_players').delete().eq('id', player.id);
+      await supabase.from('match_players').update({ has_left: true }).eq('id', player.id);
       setPlayer(null);
     } catch (err) {
-      console.error('Error leaving match:', err);
+      console.error('Error marking player left:', err);
     }
   };
 

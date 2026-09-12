@@ -14,15 +14,16 @@ export default function MatchConsoleView() {
   const [isMuted, setIsMuted] = useState(audioManager.isMuted);
   const previousStatusRef = useRef(null);
 
-  // Remove / Kick Player action for Host
-  const handleRemovePlayer = async (playerId) => {
+  // Remove / Kick Player action for Host (Non-destructive: sets has_left = true)
+  const handleRemovePlayer = async (playerId, displayName) => {
+    if (!window.confirm(`Remove ${displayName || 'this player'} from active match roster?`)) return;
     try {
-      await supabase.from('match_players').delete().eq('id', playerId);
+      await supabase.from('match_players').update({ has_left: true }).eq('id', playerId);
       if (match?.id) {
         fetchLiveLeaderboardAndProgress(match.id, match.current_round);
       }
     } catch (err) {
-      console.error('Error removing player:', err);
+      console.error('Error marking player left:', err);
     }
   };
 
@@ -67,12 +68,15 @@ export default function MatchConsoleView() {
     // Fetch players
     const { data: playerRows } = await supabase
       .from('match_players')
-      .select('id, display_name, device_token, joined_at')
+      .select('id, display_name, device_token, has_left, joined_at')
       .eq('match_id', matchId)
       .order('joined_at', { ascending: true });
 
     if (!playerRows) return;
-    setPlayers(playerRows);
+    
+    // Active players in lobby/roster (excludes players who have left/kicked)
+    const activePlayers = playerRows.filter((p) => !p.has_left);
+    setPlayers(activePlayers);
 
     // Fetch submitted answers
     const { data: answerRows } = await supabase
@@ -93,7 +97,7 @@ export default function MatchConsoleView() {
         ? pAnswers.filter((a) => a.round === Number(currentRound)).length 
         : 0;
 
-      if (roundAnswersCount >= 5) {
+      if (!p.has_left && roundAnswersCount >= 5) {
         donePlayersCount++;
       }
 
@@ -102,6 +106,7 @@ export default function MatchConsoleView() {
         match_id: matchId,
         display_name: p.display_name,
         device_token: p.device_token,
+        has_left: p.has_left,
         total_score: totalScore,
         correct_count: correctCount,
         total_answers: pAnswers.length,
@@ -393,7 +398,7 @@ export default function MatchConsoleView() {
                           </span>
                         </div>
                         <button
-                          onClick={() => handleRemovePlayer(p.id)}
+                          onClick={() => handleRemovePlayer(p.id, p.display_name)}
                           title="Remove player from match"
                           style={{
                             background: 'rgba(255, 118, 117, 0.15)',
@@ -552,7 +557,7 @@ export default function MatchConsoleView() {
                           {player.total_score} pts
                         </span>
                         <button
-                          onClick={() => handleRemovePlayer(player.player_id)}
+                          onClick={() => handleRemovePlayer(player.player_id, player.display_name)}
                           title="Remove player from match"
                           style={{
                             background: 'rgba(255, 118, 117, 0.15)',
