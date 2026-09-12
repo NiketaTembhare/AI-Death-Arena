@@ -22,6 +22,7 @@ export default function MatchConsoleView() {
   const previousStatusRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const lastBeepedRef = useRef(null);
+  const hasFiredFinalCelebrationRef = useRef(false);
 
   const handleSynchronizedCountdown = (startedAtIso) => {
     if (countdownIntervalRef.current) {
@@ -288,71 +289,98 @@ export default function MatchConsoleView() {
   };
 
   const triggerFinalChampionsCelebration = () => {
-    // Final Results (ARENA CHAMPIONS): Large dark-bright paper strips AND requested emojis
+    if (hasFiredFinalCelebrationRef.current) return;
+    hasFiredFinalCelebrationRef.current = true;
+
+    audioManager.playFinalFanfare();
+    audioManager.playApplauseClapping(5);
+
     const emojiShapes = getEmojiShapes();
     const mixedShapes = ['square', ...emojiShapes];
 
-    // Phase 1: Center explosive mega burst
-    setTimeout(() => {
-      confetti({
-        zIndex: 999999,
-        particleCount: 170,
-        spread: 100,
-        startVelocity: 65,
-        origin: { y: 0.6 },
-        scalar: 2.4,
-        shapes: mixedShapes,
-        colors: DARK_BRIGHT_COLORS
-      });
-    }, 150);
+    // 1. INSTANT (0ms) Center Explosive Mega Burst - 300 Particles!
+    confetti({
+      zIndex: 999999,
+      particleCount: 300,
+      spread: 120,
+      startVelocity: 70,
+      origin: { y: 0.6 },
+      scalar: 2.8,
+      shapes: mixedShapes,
+      colors: DARK_BRIGHT_COLORS
+    });
 
-    // Phase 2: Dual Cannons from Left and Right
+    // 2. 250ms Dual Cannon Blast from Left & Right Sides (300 total particles)
     setTimeout(() => {
       confetti({
         zIndex: 999999,
-        particleCount: 100,
+        particleCount: 150,
         angle: 55,
-        spread: 80,
-        startVelocity: 65,
+        spread: 90,
+        startVelocity: 75,
         origin: { x: 0, y: 0.7 },
-        scalar: 2.8,
+        scalar: 3.0,
         shapes: mixedShapes,
         colors: DARK_BRIGHT_COLORS
       });
       confetti({
         zIndex: 999999,
-        particleCount: 100,
+        particleCount: 150,
         angle: 125,
-        spread: 80,
-        startVelocity: 65,
+        spread: 90,
+        startVelocity: 75,
         origin: { x: 1, y: 0.7 },
-        scalar: 2.8,
+        scalar: 3.0,
         shapes: mixedShapes,
         colors: DARK_BRIGHT_COLORS
       });
-    }, 700);
+    }, 250);
 
-    // Phase 3: Continuous shower of large paper strips & emojis raining down
-    const duration = 3800;
+    // 3. 500ms High-Altitude Center Explosion (200 particles)
+    setTimeout(() => {
+      confetti({
+        zIndex: 999999,
+        particleCount: 200,
+        spread: 140,
+        startVelocity: 60,
+        origin: { y: 0.4 },
+        scalar: 3.2,
+        shapes: mixedShapes,
+        colors: DARK_BRIGHT_COLORS
+      });
+    }, 500);
+
+    // 4. Continuous High-Density Shower (Raining down for 6 full seconds)
+    const duration = 6000;
     const animationEnd = Date.now() + duration;
 
     const frame = () => {
       confetti({
-        particleCount: 5,
+        particleCount: 8,
         angle: 60,
-        spread: 55,
-        origin: { x: 0, y: 0.35 },
-        scalar: 2.2,
+        spread: 60,
+        origin: { x: 0.1, y: 0.2 },
+        scalar: 2.5,
         shapes: mixedShapes,
         colors: DARK_BRIGHT_COLORS,
         zIndex: 999999
       });
       confetti({
-        particleCount: 5,
+        particleCount: 8,
         angle: 120,
-        spread: 55,
-        origin: { x: 1, y: 0.35 },
-        scalar: 2.2,
+        spread: 60,
+        origin: { x: 0.9, y: 0.2 },
+        scalar: 2.5,
+        shapes: mixedShapes,
+        colors: DARK_BRIGHT_COLORS,
+        zIndex: 999999
+      });
+      confetti({
+        particleCount: 6,
+        angle: 90,
+        spread: 100,
+        origin: { x: 0.5, y: 0.1 },
+        scalar: 2.8,
         shapes: mixedShapes,
         colors: DARK_BRIGHT_COLORS,
         zIndex: 999999
@@ -362,7 +390,7 @@ export default function MatchConsoleView() {
         requestAnimationFrame(frame);
       }
     };
-    setTimeout(frame, 1200);
+    setTimeout(frame, 600);
   };
 
   const handleStatusSoundCue = (status) => {
@@ -432,6 +460,7 @@ export default function MatchConsoleView() {
 
   // State A action: Start New Match (auto-archive non-final active matches)
   const handleStartNewMatch = async () => {
+    hasFiredFinalCelebrationRef.current = false;
     audioManager.initContext();
     setLoading(true);
     try {
@@ -528,6 +557,12 @@ export default function MatchConsoleView() {
   const updateMatchStatus = async (nextStatus, roundNum) => {
     if (isStartingRound || countdownNum !== null) return;
     audioManager.initContext();
+
+    if (nextStatus === 'final_results') {
+      // INSTANTLY launch celebration & podium view on host click (0ms delay!)
+      triggerFinalChampionsCelebration();
+      setMatch((prev) => (prev ? { ...prev, status: 'final_results', current_round: 3 } : prev));
+    }
 
     const isStarting = nextStatus === 'round1' || nextStatus === 'round2' || nextStatus === 'round3';
     if (isStarting) {
