@@ -1,0 +1,237 @@
+/* AI-DEATH ARENA — Core Design System */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Inter:wght@400;600;700&display=swap');
+
+:root {
+  --font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Primary Brand Colors */
+  --color-purple-main: #6C5CE7;
+  --color-purple-dark: #161334;
+  --color-purple-deep: #0D0B1D;
+
+  /* Vibrant Action Palette (Kahoot Style) */
+  --color-btn-orange: #FF7675;
+  --color-btn-green: #00B894;
+  --color-btn-blue: #0984E3;
+  --color-btn-yellow: #FDCB6E;
+  --color-btn-purple: #A29BFE;
+
+  /* Surfaces & Backgrounds */
+  --bg-light: #F4F5F9;
+  --card-light: #FFFFFF;
+  --text-dark: #2D3436;
+  --text-muted: #636E72;
+  --border-light: #E2E8F0;
+
+  /* Match Console Dark Theme (Projector optimized) */
+  --bg-console: #0D0B1D;
+  --card-console: #1E1A3C;
+  --text-console: #FFFFFF;
+  --border-console: #2D2856;
+
+  /* Shared Properties */
+  --radius-sm: 10px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --radius-full: 9999px;
+  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.08);
+  --shadow-btn: 0 6px 0px rgba(0, 0, 0, 0.18);
+  --shadow-btn-active: 0 2px 0px rgba(0, 0, 0, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-family);
+  background-color: var(--bg-light);
+  color: var(--text-dark);
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Safe Area Insets for Mobile Devices */
+.safe-padding {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+/* Typography Helpers */
+h1, h2, h3, h4 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.brand-title {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #FF7675, #A29BFE, #74B9FF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Action Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.75rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  user-select: none;
+  min-height: 52px;
+  text-decoration: none;
+  color: #FFFFFF;
+}
+
+.btn:active {
+  transform: translateY(4px);
+}
+
+.btn-orange {
+  background-color: var(--color-btn-orange);
+  box-shadow: 0 5px 0 #D63031;
+}
+.btn-orange:active { box-shadow: 0 2px 0 #D63031; }
+
+.btn-green {
+  background-color: var(--color-btn-green);
+  box-shadow: 0 5px 0 #00876C;
+}
+.btn-green:active { box-shadow: 0 2px 0 #00876C; }
+
+.btn-blue {
+  background-color: var(--color-btn-blue);
+  box-shadow: 0 5px 0 #0971C7;
+}
+.btn-blue:active { box-shadow: 0 2px 0 #0971C7; }
+
+.btn-yellow {
+  background-color: var(--color-btn-yellow);
+  color: #2D3436;
+  box-shadow: 0 5px 0 #E1B12C;
+}
+.btn-yellow:active { box-shadow: 0 2px 0 #E1B12C; }
+
+.btn-purple {
+  background-color: var(--color-purple-main);
+  box-shadow: 0 5px 0 #4C41B4;
+}
+.btn-purple:active { box-shadow: 0 2px 0 #4C41B4; }
+
+.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Sound Toggle Badge */
+.sound-toggle-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  backdrop-filter: blur(8px);
+}
+
+/* Card Components */
+.card-light {
+  background: var(--card-light);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  box-shadow: var(--shadow-card);
+}
+
+.card-console {
+  background: var(--card-console);
+  border: 1px solid var(--border-console);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  color: var(--text-console);
+}
+
+/* Avatar Badge */
+.avatar-badge {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  flex-shrink: 0;
+}
+
+/* Timer Pill */
+.timer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #FFEAA7;
+  color: #D63031;
+  padding: 0.4rem 1.25rem;
+  border-radius: var(--radius-full);
+  font-weight: 800;
+  font-size: 1.25rem;
+  box-shadow: 0 4px 12px rgba(214, 48, 49, 0.2);
+}
+
+/* Synchronized Countdown Overlay */
+.countdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 11, 29, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  color: #FFFFFF;
+  animation: fadeIn 0.2s ease;
+}
+
+.countdown-number {
+  font-size: clamp(6rem, 20vw, 12rem);
+  font-weight: 900;
+  color: #FF7675;
+  text-shadow: 0 0 40px rgba(255, 118, 117, 0.8);
+  animation: popScale 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) infinite;
+}
+
+@keyframes popScale {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
