@@ -641,7 +641,7 @@ export default function PlayerView() {
         </header>
 
         {/* Question Title & Prompt */}
-        <div style={{ textAlign: 'center', marginBottom: '0.25rem', flexShrink: 0 }}>
+        <div style={{ textAlign: 'center', marginBottom: '0.25rem', marginTop: currentQ.round === 1 ? '1.25rem' : '0.55rem', flexShrink: 0 }}>
           <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#6C5CE7', textTransform: 'uppercase', letterSpacing: '1px' }}>
             ROUND {currentQ.round} — {currentQ.round === 1 ? 'REAL OR FAKE?' : currentQ.round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
           </span>
@@ -682,7 +682,7 @@ export default function PlayerView() {
         )}
 
         {/* Content Area (Round 1 Images vs Round 2 Logo vs Round 3 Emoji) */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.35rem', marginBottom: '0.1rem' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: currentQ.round === 1 ? 'space-between' : 'flex-start', gap: '0.35rem', marginBottom: '0.1rem' }}>
 
           {/* ROUND 1: Two Images Side by Side (Vertically Centered) */}
           {currentQ.round === 1 && (
@@ -749,9 +749,9 @@ export default function PlayerView() {
             </div>
           )}
 
-          {/* ROUND 2: Brand Logo Display (Compact Zero-scroll Centered Layout) */}
+          {/* ROUND 2: Brand Logo Display (Compact Zero-scroll Layout) */}
           {currentQ.round === 2 && (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.15rem 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0 0.5rem 0' }}>
               <div style={{
                 width: '135px',
                 height: '135px',
@@ -774,9 +774,9 @@ export default function PlayerView() {
             </div>
           )}
 
-          {/* ROUND 3: Emoji Clue Display (Single centered responsive display) */}
+          {/* ROUND 3: Emoji Clue Display (Compact Zero-scroll Layout) */}
           {currentQ.round === 3 && (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.15rem 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0 0.5rem 0' }}>
               <span style={{ fontSize: 'clamp(3.2rem, 12vw, 4.2rem)', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))', lineHeight: 1 }}>
                 {currentQ.prompt_text}
               </span>
