@@ -23,32 +23,29 @@ export default function MatchConsoleView() {
   const lastBeepedRef = useRef(null);
 
   const handleSynchronizedCountdown = (startedAtIso) => {
-    if (!startedAtIso) return;
-    const targetMs = new Date(startedAtIso).getTime();
-    const nowMs = Date.now();
-
-    // If target timestamp is more than 3.5s in the past, skip
-    if (nowMs - targetMs > 3500) {
-      setCountdownNum(null);
-      setIsStartingRound(false);
-      return;
-    }
-
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
     }
     lastBeepedRef.current = null;
+
+    let targetMs = startedAtIso ? new Date(startedAtIso).getTime() : Date.now() + 3500;
+    const nowMs = Date.now();
+    let remaining = targetMs - nowMs;
+
+    if (remaining <= 500 || remaining > 8000) {
+      targetMs = Date.now() + 3200;
+    }
 
     countdownIntervalRef.current = setInterval(() => {
       const currentNow = Date.now();
       const remainingMs = targetMs - currentNow;
 
       let currentStep = null;
-      if (remainingMs > 2800) {
+      if (remainingMs > 2200) {
         currentStep = 3;
-      } else if (remainingMs > 1800) {
+      } else if (remainingMs > 1200) {
         currentStep = 2;
-      } else if (remainingMs > 800) {
+      } else if (remainingMs > 200) {
         currentStep = 1;
       } else if (remainingMs > -600) {
         currentStep = 0; // GO!

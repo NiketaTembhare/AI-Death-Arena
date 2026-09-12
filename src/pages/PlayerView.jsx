@@ -40,6 +40,7 @@ export default function PlayerView() {
   const timerIntervalRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const lastBeepedRef = useRef(null);
+  const lastCountdownRoundRef = useRef(null);
 
   // 1. Initialize Device Token
   useEffect(() => {
@@ -164,7 +165,7 @@ export default function PlayerView() {
 
     if (match.status === 'round1' || match.status === 'round2' || match.status === 'round3') {
       fetchPlayerQuestions(match.id, player.id, match.current_round);
-      handleSynchronizedCountdown(match.round_started_at);
+      handleSynchronizedCountdown(match.round_started_at, match.current_round);
     } else if (match.status === 'final_results') {
       const todayStr = new Date().toISOString().split('T')[0];
       localStorage.setItem('arena_completed_date', todayStr);
@@ -173,32 +174,37 @@ export default function PlayerView() {
     }
   }, [match?.status, match?.round_started_at, player?.id]);
 
-  const handleSynchronizedCountdown = (startedAtIso) => {
-    if (!startedAtIso) return;
-    const targetMs = new Date(startedAtIso).getTime();
-    const nowMs = Date.now();
-
-    // If target timestamp is more than 3.5s in the past, round has already started
-    if (nowMs - targetMs > 3500) {
-      setCountdownNum(null);
-      return;
-    }
+  const handleSynchronizedCountdown = (startedAtIso, roundNum) => {
+    // Avoid double countdowns for the exact same round
+    const roundKey = `${roundNum}_${startedAtIso || ''}`;
+    if (lastCountdownRoundRef.current === roundKey) return;
+    lastCountdownRoundRef.current = roundKey;
 
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
     }
     lastBeepedRef.current = null;
 
+    let targetMs = startedAtIso ? new Date(startedAtIso).getTime() : Date.now() + 3500;
+    const nowMs = Date.now();
+    let remaining = targetMs - nowMs;
+
+    // Fallback: If network latency or clock skew caused targetMs to be in the past or far future,
+    // guarantee a smooth local 3.2-second GET READY countdown for the player!
+    if (remaining <= 500 || remaining > 8000) {
+      targetMs = Date.now() + 3200;
+    }
+
     countdownIntervalRef.current = setInterval(() => {
       const currentNow = Date.now();
       const remainingMs = targetMs - currentNow;
 
       let currentStep = null;
-      if (remainingMs > 2800) {
+      if (remainingMs > 2200) {
         currentStep = 3;
-      } else if (remainingMs > 1800) {
+      } else if (remainingMs > 1200) {
         currentStep = 2;
-      } else if (remainingMs > 800) {
+      } else if (remainingMs > 200) {
         currentStep = 1;
       } else if (remainingMs > -600) {
         currentStep = 0; // GO!
