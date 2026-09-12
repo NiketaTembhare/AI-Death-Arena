@@ -30,17 +30,16 @@ export default function MatchConsoleView() {
     }
     lastBeepedRef.current = null;
 
-    let targetMs = startedAtIso ? new Date(startedAtIso).getTime() : Date.now() + 3500;
-    const nowMs = Date.now();
-    let remaining = targetMs - nowMs;
-
-    if (remaining <= 500 || remaining > 8000) {
-      targetMs = Date.now() + 3200;
+    if (!startedAtIso) {
+      setCountdownNum(null);
+      setIsStartingRound(false);
+      return;
     }
 
-    countdownIntervalRef.current = setInterval(() => {
-      const currentNow = Date.now();
-      const remainingMs = targetMs - currentNow;
+    const targetMs = new Date(startedAtIso).getTime();
+
+    const updateStep = () => {
+      const remainingMs = targetMs - Date.now();
 
       let currentStep = null;
       if (remainingMs > 2200) {
@@ -69,7 +68,13 @@ export default function MatchConsoleView() {
           countdownIntervalRef.current = null;
         }
       }
-    }, 40);
+    };
+
+    updateStep();
+
+    if (targetMs - Date.now() > -600) {
+      countdownIntervalRef.current = setInterval(updateStep, 40);
+    }
   };
 
   useEffect(() => {

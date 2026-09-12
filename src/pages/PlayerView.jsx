@@ -176,7 +176,7 @@ export default function PlayerView() {
   }, [match?.status, match?.round_started_at, player?.id]);
 
   const handleSynchronizedCountdown = (startedAtIso, roundNum) => {
-    // Avoid double countdowns for the exact same round
+    // Avoid double countdowns for the exact same round & timestamp
     const roundKey = `${roundNum}_${startedAtIso || ''}`;
     if (lastCountdownRoundRef.current === roundKey) return;
     lastCountdownRoundRef.current = roundKey;
@@ -186,19 +186,16 @@ export default function PlayerView() {
     }
     lastBeepedRef.current = null;
 
-    let targetMs = startedAtIso ? new Date(startedAtIso).getTime() : Date.now() + 3500;
-    const nowMs = Date.now();
-    let remaining = targetMs - nowMs;
-
-    // Fallback: If network latency or clock skew caused targetMs to be in the past or far future,
-    // guarantee a smooth local 3.2-second GET READY countdown for the player!
-    if (remaining <= 500 || remaining > 8000) {
-      targetMs = Date.now() + 3200;
+    if (!startedAtIso) {
+      setCountdownNum(null);
+      startPerQuestionTimer(15);
+      return;
     }
 
-    countdownIntervalRef.current = setInterval(() => {
-      const currentNow = Date.now();
-      const remainingMs = targetMs - currentNow;
+    const targetMs = new Date(startedAtIso).getTime();
+
+    const updateStep = () => {
+      const remainingMs = targetMs - Date.now();
 
       let currentStep = null;
       if (remainingMs > 2200) {
@@ -210,7 +207,7 @@ export default function PlayerView() {
       } else if (remainingMs > -600) {
         currentStep = 0; // GO!
       } else {
-        currentStep = null;
+        currentStep = null; // Completed / Past
       }
 
       if (currentStep !== null) {
@@ -227,7 +224,13 @@ export default function PlayerView() {
         }
         startPerQuestionTimer(15);
       }
-    }, 40);
+    };
+
+    updateStep();
+
+    if (targetMs - Date.now() > -600) {
+      countdownIntervalRef.current = setInterval(updateStep, 40);
+    }
   };
 
   const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {
