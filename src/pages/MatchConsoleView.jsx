@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
-import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight } from 'lucide-react';
+import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X } from 'lucide-react';
 
 export default function MatchConsoleView() {
   const [match, setMatch] = useState(null);
@@ -13,6 +13,18 @@ export default function MatchConsoleView() {
   const [answeredCount, setAnsweredCount] = useState(0);
   const [isMuted, setIsMuted] = useState(audioManager.isMuted);
   const previousStatusRef = useRef(null);
+
+  // Remove / Kick Player action for Host
+  const handleRemovePlayer = async (playerId) => {
+    try {
+      await supabase.from('match_players').delete().eq('id', playerId);
+      if (match?.id) {
+        fetchLiveLeaderboardAndProgress(match.id, match.current_round);
+      }
+    } catch (err) {
+      console.error('Error removing player:', err);
+    }
+  };
 
   // Subscribe to AudioManager mute changes
   useEffect(() => {
@@ -368,15 +380,37 @@ export default function MatchConsoleView() {
                           padding: '0.75rem 1rem',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '0.75rem'
+                          justifyContent: 'space-between',
+                          gap: '0.5rem'
                         }}
                       >
-                        <div className="avatar-badge" style={{ background: avatar.bgColor }}>
-                          {avatar.emoji}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                          <div className="avatar-badge" style={{ background: avatar.bgColor }}>
+                            {avatar.emoji}
+                          </div>
+                          <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.display_name}
+                          </span>
                         </div>
-                        <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {p.display_name}
-                        </span>
+                        <button
+                          onClick={() => handleRemovePlayer(p.id)}
+                          title="Remove player from match"
+                          style={{
+                            background: 'rgba(255, 118, 117, 0.15)',
+                            border: '1px solid #FF7675',
+                            color: '#FF7675',
+                            borderRadius: '50%',
+                            width: '26px',
+                            height: '26px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            flexShrink: 0
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
                       </div>
                     );
                   })}
@@ -517,6 +551,24 @@ export default function MatchConsoleView() {
                         <span style={{ fontSize: '1.5rem', fontWeight: 900, color: '#FDCB6E' }}>
                           {player.total_score} pts
                         </span>
+                        <button
+                          onClick={() => handleRemovePlayer(player.player_id)}
+                          title="Remove player from match"
+                          style={{
+                            background: 'rgba(255, 118, 117, 0.15)',
+                            border: '1px solid #FF7675',
+                            color: '#FF7675',
+                            borderRadius: '50%',
+                            width: '28px',
+                            height: '28px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
                       </div>
                     </div>
                   );

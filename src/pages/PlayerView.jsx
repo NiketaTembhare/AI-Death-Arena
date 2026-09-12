@@ -377,6 +377,16 @@ export default function PlayerView() {
     }
   };
 
+  const handleLeaveMatch = async () => {
+    if (!player) return;
+    try {
+      await supabase.from('match_players').delete().eq('id', player.id);
+      setPlayer(null);
+    } catch (err) {
+      console.error('Error leaving match:', err);
+    }
+  };
+
   if (!roomCodeParam) {
     return (
       <div style={playerContainerStyle}>
@@ -503,11 +513,15 @@ export default function PlayerView() {
             YOU ARE IN THE LOBBY
           </span>
 
-          <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+          <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '16px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>
             <p style={{ color: '#636E72', fontWeight: 600 }}>
               Look at the main projector screen! The match will start when the host clicks Start Round 1.
             </p>
           </div>
+
+          <button onClick={handleLeaveMatch} className="btn" style={{ background: '#DFE6E9', color: '#636E72', fontSize: '0.9rem', width: '100%' }}>
+            Leave Match
+          </button>
         </div>
       </div>
     );
