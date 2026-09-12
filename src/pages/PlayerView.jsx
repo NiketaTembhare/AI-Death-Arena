@@ -38,6 +38,7 @@ export default function PlayerView() {
   const [timeLeftSec, setTimeLeftSec] = useState(15);
   const questionStartTimeRef = useRef(Date.now());
   const timerIntervalRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
   const lastBeepedRef = useRef(null);
 
   // 1. Initialize Device Token
@@ -54,6 +55,15 @@ export default function PlayerView() {
     if (completedToday === todayStr) {
       setIsRepeatPlayer(true);
     }
+
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
   }, []);
 
   // 2. Fetch Match by Room Code & Re-hydrate player
@@ -166,30 +176,50 @@ export default function PlayerView() {
   const handleSynchronizedCountdown = (startedAtIso) => {
     if (!startedAtIso) return;
     const targetMs = new Date(startedAtIso).getTime();
+    const nowMs = Date.now();
+
+    if (nowMs - targetMs > 1000) {
+      setCountdownNum(null);
+      return;
+    }
+
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
     lastBeepedRef.current = null;
 
-    const interval = setInterval(() => {
-      const nowMs = Date.now();
-      const diffSec = Math.max(0, Math.ceil((targetMs - nowMs) / 1000));
+    countdownIntervalRef.current = setInterval(() => {
+      const currentNow = Date.now();
+      const remainingMs = targetMs - currentNow;
 
-      if (diffSec > 0) {
-        setCountdownNum(diffSec);
-        if (lastBeepedRef.current !== diffSec) {
-          lastBeepedRef.current = diffSec;
-          audioManager.playCountdownBeep(diffSec);
-        }
-      } else if (diffSec === 0 && (nowMs - targetMs) < 900) {
-        setCountdownNum(0);
-        if (lastBeepedRef.current !== 0) {
-          lastBeepedRef.current = 0;
-          audioManager.playCountdownBeep(0);
+      let currentStep = null;
+      if (remainingMs > 2200) {
+        currentStep = 3;
+      } else if (remainingMs > 1200) {
+        currentStep = 2;
+      } else if (remainingMs > 200) {
+        currentStep = 1;
+      } else if (remainingMs > -800) {
+        currentStep = 0; // GO!
+      } else {
+        currentStep = null;
+      }
+
+      if (currentStep !== null) {
+        setCountdownNum(currentStep);
+        if (lastBeepedRef.current !== currentStep) {
+          lastBeepedRef.current = currentStep;
+          audioManager.playCountdownBeep(currentStep);
         }
       } else {
         setCountdownNum(null);
-        clearInterval(interval);
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
         startPerQuestionTimer(15);
       }
-    }, 100);
+    }, 40);
   };
 
   const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {

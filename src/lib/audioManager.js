@@ -1,4 +1,4 @@
-// Web Audio API Synthesizer Sound Engine for AI-DEATH ARENA
+// Web Audio API Synthesizer Sound Engine & Web Speech AI Voice for AI-DEATH ARENA
 class AudioManager {
   constructor() {
     this.ctx = null;
@@ -6,6 +6,9 @@ class AudioManager {
     this.listeners = new Set();
     this.setupGlobalUnlock();
     this.setupVisibilityHandler();
+    this.voices = [];
+    this.selectedVoice = null;
+    this.initSpeech();
   }
 
   // Pre-unlock AudioContext on the first user interaction anywhere on page
@@ -40,6 +43,42 @@ class AudioManager {
     });
   }
 
+  initSpeech() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const loadVoices = () => {
+        try {
+          this.voices = window.speechSynthesis.getVoices() || [];
+          if (this.voices.length > 0) {
+            // Pick a high-quality natural sounding English voice
+            const preferred = this.voices.find(v =>
+              v.lang.startsWith('en') && (
+                v.name.includes('Google') ||
+                v.name.includes('Natural') ||
+                v.name.includes('Samantha') ||
+                v.name.includes('Jenny') ||
+                v.name.includes('Guy') ||
+                v.name.includes('Aria') ||
+                v.name.includes('Zira') ||
+                v.name.includes('David') ||
+                v.name.includes('Alex') ||
+                v.name.includes('Daniel')
+              )
+            );
+            const englishFallback = this.voices.find(v => v.lang.startsWith('en'));
+            this.selectedVoice = preferred || englishFallback || this.voices[0] || null;
+          }
+        } catch (e) {
+          console.warn('Speech synthesis voice load error', e);
+        }
+      };
+
+      loadVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+      }
+    }
+  }
+
   initContext() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -50,12 +89,22 @@ class AudioManager {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
   }
 
   toggleMute() {
     this.initContext();
     this.isMuted = !this.isMuted;
     localStorage.setItem('arena_sound_muted', this.isMuted ? 'true' : 'false');
+    if (this.isMuted && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        // ignore
+      }
+    }
     this.notify();
     return this.isMuted;
   }
@@ -67,6 +116,59 @@ class AudioManager {
 
   notify() {
     this.listeners.forEach((fn) => fn(this.isMuted));
+  }
+
+  speakVoice(text, options = {}) {
+    if (this.isMuted) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    try {
+      // Cancel previous speech to prevent overlapping or queuing delay
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      if (this.selectedVoice) {
+        utterance.voice = this.selectedVoice;
+      } else {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices && voices.length > 0) {
+          const fallback = voices.find(v => v.lang.startsWith('en')) || voices[0];
+          utterance.voice = fallback;
+          this.selectedVoice = fallback;
+        }
+      }
+
+      utterance.rate = options.rate !== undefined ? options.rate : 1.0;
+      utterance.pitch = options.pitch !== undefined ? options.pitch : 1.0;
+      utterance.volume = options.volume !== undefined ? options.volume : 1.0;
+
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Speech synthesis speak error:', e);
+    }
+  }
+
+  speakCountdown(number) {
+    if (this.isMuted) return;
+    const words = {
+      3: 'Three!',
+      2: 'Two!',
+      1: 'One!',
+      0: 'Go!'
+    };
+    const word = words[number];
+    if (word) {
+      this.speakVoice(word, {
+        rate: 1.0,
+        pitch: number === 0 ? 1.2 : 1.05,
+        volume: 1.0
+      });
+    }
   }
 
   playBeep(freq = 440, type = 'sine', duration = 0.15, gainVal = 0.3) {
@@ -95,7 +197,7 @@ class AudioManager {
     if (this.isMuted) return;
     this.initContext();
     if (number > 0) {
-      // Clear, musical rising chime for numbers 4, 3, 2, 1
+      // Clear, musical rising chime for numbers 3, 2, 1
       const pitches = { 4: 440, 3: 523.25, 2: 659.25, 1: 783.99 };
       const freq = pitches[number] || 523.25;
       this.playBeep(freq, 'sine', 0.22, 0.5);
@@ -104,6 +206,8 @@ class AudioManager {
       this.playBeep(1046.5, 'triangle', 0.35, 0.65);
       setTimeout(() => this.playBeep(1318.51, 'sine', 0.3, 0.55), 80);
     }
+    // Synchronized AI voice announcement
+    this.speakCountdown(number);
   }
 
   playCorrect() {

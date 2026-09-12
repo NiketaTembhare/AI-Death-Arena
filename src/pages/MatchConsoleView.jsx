@@ -16,7 +16,70 @@ export default function MatchConsoleView() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [isMuted, setIsMuted] = useState(audioManager.isMuted);
+  const [countdownNum, setCountdownNum] = useState(null);
+  const [isStartingRound, setIsStartingRound] = useState(false);
   const previousStatusRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
+  const lastBeepedRef = useRef(null);
+
+  const handleSynchronizedCountdown = (startedAtIso) => {
+    if (!startedAtIso) return;
+    const targetMs = new Date(startedAtIso).getTime();
+    const nowMs = Date.now();
+
+    // If target timestamp is already over 1s in the past, skip
+    if (nowMs - targetMs > 1000) {
+      setCountdownNum(null);
+      setIsStartingRound(false);
+      return;
+    }
+
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
+    lastBeepedRef.current = null;
+
+    countdownIntervalRef.current = setInterval(() => {
+      const currentNow = Date.now();
+      const remainingMs = targetMs - currentNow;
+
+      let currentStep = null;
+      if (remainingMs > 2200) {
+        currentStep = 3;
+      } else if (remainingMs > 1200) {
+        currentStep = 2;
+      } else if (remainingMs > 200) {
+        currentStep = 1;
+      } else if (remainingMs > -800) {
+        currentStep = 0; // GO!
+      } else {
+        currentStep = null; // Completed
+      }
+
+      if (currentStep !== null) {
+        setCountdownNum(currentStep);
+        if (lastBeepedRef.current !== currentStep) {
+          lastBeepedRef.current = currentStep;
+          audioManager.playCountdownBeep(currentStep);
+        }
+      } else {
+        setCountdownNum(null);
+        setIsStartingRound(false);
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+      }
+    }, 40);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Remove / Kick Player action for Host (Non-destructive: sets has_left = true)
   const handleRemovePlayer = async (playerId, displayName) => {
@@ -160,62 +223,6 @@ export default function MatchConsoleView() {
     setAnsweredCount(donePlayersCount);
   };
 
-  // 3. Realtime Subscriptions
-  useEffect(() => {
-    if (!match?.id) return;
-
-    fetchLiveLeaderboardAndProgress(match.id, match.current_round);
-
-    // Subscribe to match status changes
-    const matchChannel = supabase
-      .channel(`match_${match.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` }, (payload) => {
-        const newMatch = payload.new;
-        setMatch(newMatch);
-        fetchLiveLeaderboardAndProgress(newMatch.id, newMatch.current_round);
-
-        if (previousStatusRef.current !== newMatch.status) {
-          handleStatusSoundCue(newMatch.status);
-          previousStatusRef.current = newMatch.status;
-        }
-      })
-      .subscribe();
-
-    // Subscribe to joined players
-    const playerChannel = supabase
-      .channel(`players_${match.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_players', filter: `match_id=eq.${match.id}` }, () => {
-        fetchLiveLeaderboardAndProgress(match.id, matchRef.current?.current_round);
-      })
-      .subscribe();
-
-    // Subscribe to submitted answers
-    const answersChannel = supabase
-      .channel(`answers_${match.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_answers', filter: `match_id=eq.${match.id}` }, () => {
-        fetchLiveLeaderboardAndProgress(match.id, matchRef.current?.current_round);
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(matchChannel);
-      supabase.removeChannel(playerChannel);
-      supabase.removeChannel(answersChannel);
-    };
-  }, [match?.id]);
-
-  const handleStatusSoundCue = (status) => {
-    if (status.startsWith('round') && !status.includes('results')) {
-      audioManager.playRoundStart();
-    } else if (status.includes('results')) {
-      audioManager.playRoundEnd();
-    } else if (status === 'final_results') {
-      audioManager.playFinalFanfare();
-      audioManager.playApplauseClapping(4);
-      triggerChampionsCelebration();
-    }
-  };
-
   const triggerChampionsCelebration = () => {
     // Play crowd applause & fanfare
     audioManager.playFinalFanfare();
@@ -274,6 +281,66 @@ export default function MatchConsoleView() {
     }, 1800);
   };
 
+  const handleStatusSoundCue = (status) => {
+    if (status.startsWith('round') && !status.includes('results')) {
+      // Countdown takes care of synchronized voice and audio chimes
+    } else if (status.includes('results')) {
+      audioManager.playRoundEnd();
+    } else if (status === 'final_results') {
+      audioManager.playFinalFanfare();
+      audioManager.playApplauseClapping(4);
+      triggerChampionsCelebration();
+    }
+  };
+
+  // 3. Realtime Subscriptions
+  useEffect(() => {
+    if (!match?.id) return;
+
+    fetchLiveLeaderboardAndProgress(match.id, match.current_round);
+
+    // Subscribe to match status changes
+    const matchChannel = supabase
+      .channel(`match_${match.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` }, (payload) => {
+        const newMatch = payload.new;
+        setMatch(newMatch);
+        fetchLiveLeaderboardAndProgress(newMatch.id, newMatch.current_round);
+
+        if (newMatch.round_started_at && (newMatch.status === 'round1' || newMatch.status === 'round2' || newMatch.status === 'round3')) {
+          handleSynchronizedCountdown(newMatch.round_started_at);
+        }
+
+        if (previousStatusRef.current !== newMatch.status) {
+          handleStatusSoundCue(newMatch.status);
+          previousStatusRef.current = newMatch.status;
+        }
+      })
+      .subscribe();
+
+    // Subscribe to joined players
+    const playerChannel = supabase
+      .channel(`players_${match.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_players', filter: `match_id=eq.${match.id}` }, () => {
+        fetchLiveLeaderboardAndProgress(match.id, matchRef.current?.current_round);
+      })
+      .subscribe();
+
+    // Subscribe to submitted answers
+    const answersChannel = supabase
+      .channel(`answers_${match.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_answers', filter: `match_id=eq.${match.id}` }, () => {
+        fetchLiveLeaderboardAndProgress(match.id, matchRef.current?.current_round);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(matchChannel);
+      supabase.removeChannel(playerChannel);
+      supabase.removeChannel(answersChannel);
+    };
+  }, [match?.id]);
+
   // State A action: Start New Match (auto-archive non-final active matches)
   const handleStartNewMatch = async () => {
     audioManager.initContext();
@@ -299,9 +366,10 @@ export default function MatchConsoleView() {
         .select()
         .single();
 
-      if (error) throw error;
-      setMatch(data);
-      previousStatusRef.current = 'lobby';
+      if (!error && data) {
+        setMatch(data);
+        previousStatusRef.current = 'lobby';
+      }
     } catch (err) {
       console.error('Failed to create match:', err);
       alert('Error creating match. Check Supabase database setup.');
@@ -369,28 +437,45 @@ export default function MatchConsoleView() {
 
   // Advance round status
   const updateMatchStatus = async (nextStatus, roundNum) => {
+    if (isStartingRound || countdownNum !== null) return;
     audioManager.initContext();
+
+    const isStarting = nextStatus === 'round1' || nextStatus === 'round2' || nextStatus === 'round3';
+    if (isStarting) {
+      setIsStartingRound(true);
+    }
+
     const updatePayload = {
       status: nextStatus,
       current_round: roundNum
     };
 
-    if (nextStatus === 'round1' || nextStatus === 'round2' || nextStatus === 'round3') {
-      const targetTime = new Date(Date.now() + 4000).toISOString();
+    if (isStarting) {
+      const targetTime = new Date(Date.now() + 3400).toISOString();
       updatePayload.round_started_at = targetTime;
 
       await assignRoundQuestionsForPlayers(match.id, roundNum);
     }
 
-    const { data, error } = await supabase
-      .from('matches')
-      .update(updatePayload)
-      .eq('id', match.id)
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('matches')
+        .update(updatePayload)
+        .eq('id', match.id)
+        .select()
+        .single();
 
-    if (!error && data) {
-      setMatch(data);
+      if (!error && data) {
+        setMatch(data);
+        if (isStarting && data.round_started_at) {
+          handleSynchronizedCountdown(data.round_started_at);
+        }
+      } else {
+        setIsStartingRound(false);
+      }
+    } catch (err) {
+      console.error('Error updating match status:', err);
+      setIsStartingRound(false);
     }
   };
 
@@ -568,12 +653,12 @@ export default function MatchConsoleView() {
                 </p>
               )}
               <button
-                disabled={players.length === 0}
-                onClick={() => updateMatchStatus('round1', 1)}
-                className={`btn btn-green ${players.length === 0 ? 'btn-disabled' : ''}`}
+                disabled={players.length === 0 || isStartingRound || countdownNum !== null}
+                onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round1', 1)}
+                className={`btn btn-green ${players.length === 0 || isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
                 style={{ width: '100%', fontSize: '1.3rem' }}
               >
-                <Play size={24} /> START ROUND 1
+                <Play size={24} /> {isStartingRound || countdownNum !== null ? 'STARTING ROUND 1...' : 'START ROUND 1'}
               </button>
             </div>
           </div>
@@ -613,8 +698,13 @@ export default function MatchConsoleView() {
               )}
 
               {match.status === 'round1_results' && (
-                <button onClick={() => updateMatchStatus('round2', 2)} className="btn btn-green" style={{ fontSize: '1.1rem' }}>
-                  START ROUND 2 <Play size={20} />
+                <button
+                  disabled={isStartingRound || countdownNum !== null}
+                  onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round2', 2)}
+                  className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
+                  style={{ fontSize: '1.1rem' }}
+                >
+                  {isStartingRound || countdownNum !== null ? 'STARTING ROUND 2...' : 'START ROUND 2'} <Play size={20} />
                 </button>
               )}
 
@@ -625,8 +715,13 @@ export default function MatchConsoleView() {
               )}
 
               {match.status === 'round2_results' && (
-                <button onClick={() => updateMatchStatus('round3', 3)} className="btn btn-green" style={{ fontSize: '1.1rem' }}>
-                  START ROUND 3 <Play size={20} />
+                <button
+                  disabled={isStartingRound || countdownNum !== null}
+                  onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round3', 3)}
+                  className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
+                  style={{ fontSize: '1.1rem' }}
+                >
+                  {isStartingRound || countdownNum !== null ? 'STARTING ROUND 3...' : 'START ROUND 3'} <Play size={20} />
                 </button>
               )}
 
@@ -948,6 +1043,18 @@ export default function MatchConsoleView() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Synchronized Countdown Overlay */}
+      {countdownNum !== null && (
+        <div className="countdown-overlay">
+          <span style={{ fontSize: '1.5rem', fontWeight: 800, color: '#A29BFE', marginBottom: '1rem', letterSpacing: '2px' }}>
+            ROUND {match?.current_round || 1} STARTING
+          </span>
+          <div className="countdown-number">
+            {countdownNum === 0 ? 'GO!' : countdownNum}
           </div>
         </div>
       )}
