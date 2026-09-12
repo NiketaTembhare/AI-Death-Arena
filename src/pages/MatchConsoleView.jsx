@@ -221,76 +221,161 @@ export default function MatchConsoleView() {
     setAnsweredCount(donePlayersCount);
   };
 
-  const triggerChampionsCelebration = () => {
-    // Play crowd applause & fanfare
-    audioManager.playFinalFanfare();
-    audioManager.playApplauseClapping(4);
+  const DARK_BRIGHT_COLORS = ['#F59E0B', '#7C3AED', '#EC4899', '#06B6D4', '#EF4444', '#10B981', '#F97316'];
+  const CELEBRATION_EMOJIS = ['👏🏻', '👏🏼', '✨', '💸', '🥳', '🎉', '🎊', '🪩'];
 
-    // Phase 1: Immediate party popper burst from center
+  const getEmojiShapes = () => {
+    if (typeof confetti.shapeFromText === 'function') {
+      return CELEBRATION_EMOJIS.map((emoji) =>
+        confetti.shapeFromText({ text: emoji, scalar: 2.5 })
+      );
+    }
+    return [];
+  };
+
+  const triggerRoundResultsCelebration = () => {
+    // Round 1 & Round 2 Results: Large dark-bright paper strips (scalar: 1.8 - 2.8)
     setTimeout(() => {
-      const count = 250;
-      const defaults = { origin: { y: 0.6 }, zIndex: 999999 };
+      confetti({
+        zIndex: 999999,
+        particleCount: 130,
+        spread: 90,
+        startVelocity: 55,
+        origin: { y: 0.6 },
+        scalar: 2.2,
+        shapes: ['square'],
+        colors: DARK_BRIGHT_COLORS
+      });
+    }, 150);
 
-      function fire(particleRatio, opts) {
-        confetti({
-          ...defaults,
-          ...opts,
-          particleCount: Math.floor(count * particleRatio)
-        });
-      }
-
-      fire(0.25, { spread: 26, startVelocity: 55 });
-      fire(0.2, { spread: 60 });
-      fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
-      fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
-      fire(0.1, { spread: 120, startVelocity: 45 });
-    }, 350);
-
-    // Phase 2: Party Popper Cannons from Left and Right sides
     setTimeout(() => {
       confetti({
         zIndex: 999999,
         particleCount: 80,
         angle: 60,
-        spread: 70,
+        spread: 75,
+        startVelocity: 60,
         origin: { x: 0, y: 0.75 },
-        colors: ['#FF7675', '#00B894', '#0984E3', '#FDCB6E', '#A29BFE']
+        scalar: 2.6,
+        shapes: ['square'],
+        colors: DARK_BRIGHT_COLORS
       });
       confetti({
         zIndex: 999999,
         particleCount: 80,
         angle: 120,
-        spread: 70,
+        spread: 75,
+        startVelocity: 60,
         origin: { x: 1, y: 0.75 },
-        colors: ['#FF7675', '#00B894', '#0984E3', '#FDCB6E', '#A29BFE']
+        scalar: 2.6,
+        shapes: ['square'],
+        colors: DARK_BRIGHT_COLORS
       });
-    }, 900);
+    }, 600);
 
-    // Phase 3: Star Shower burst at 1.8s
     setTimeout(() => {
       confetti({
         zIndex: 999999,
-        particleCount: 60,
-        spread: 100,
-        origin: { y: 0.4 },
-        shapes: ['star'],
-        colors: ['#FDCB6E', '#F1C40F', '#E67E22', '#FFFFFF']
+        particleCount: 100,
+        spread: 120,
+        startVelocity: 45,
+        origin: { y: 0.5 },
+        scalar: 2.8,
+        shapes: ['square'],
+        colors: DARK_BRIGHT_COLORS
       });
-    }, 1800);
+    }, 1100);
+  };
+
+  const triggerFinalChampionsCelebration = () => {
+    // Final Results (ARENA CHAMPIONS): Large dark-bright paper strips AND requested emojis
+    const emojiShapes = getEmojiShapes();
+    const mixedShapes = ['square', ...emojiShapes];
+
+    // Phase 1: Center explosive mega burst
+    setTimeout(() => {
+      confetti({
+        zIndex: 999999,
+        particleCount: 170,
+        spread: 100,
+        startVelocity: 65,
+        origin: { y: 0.6 },
+        scalar: 2.4,
+        shapes: mixedShapes,
+        colors: DARK_BRIGHT_COLORS
+      });
+    }, 150);
+
+    // Phase 2: Dual Cannons from Left and Right
+    setTimeout(() => {
+      confetti({
+        zIndex: 999999,
+        particleCount: 100,
+        angle: 55,
+        spread: 80,
+        startVelocity: 65,
+        origin: { x: 0, y: 0.7 },
+        scalar: 2.8,
+        shapes: mixedShapes,
+        colors: DARK_BRIGHT_COLORS
+      });
+      confetti({
+        zIndex: 999999,
+        particleCount: 100,
+        angle: 125,
+        spread: 80,
+        startVelocity: 65,
+        origin: { x: 1, y: 0.7 },
+        scalar: 2.8,
+        shapes: mixedShapes,
+        colors: DARK_BRIGHT_COLORS
+      });
+    }, 700);
+
+    // Phase 3: Continuous shower of large paper strips & emojis raining down
+    const duration = 3800;
+    const animationEnd = Date.now() + duration;
+
+    const frame = () => {
+      confetti({
+        particleCount: 5,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0, y: 0.35 },
+        scalar: 2.2,
+        shapes: mixedShapes,
+        colors: DARK_BRIGHT_COLORS,
+        zIndex: 999999
+      });
+      confetti({
+        particleCount: 5,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1, y: 0.35 },
+        scalar: 2.2,
+        shapes: mixedShapes,
+        colors: DARK_BRIGHT_COLORS,
+        zIndex: 999999
+      });
+
+      if (Date.now() < animationEnd) {
+        requestAnimationFrame(frame);
+      }
+    };
+    setTimeout(frame, 1200);
   };
 
   const handleStatusSoundCue = (status) => {
-    if (status.startsWith('round') && !status.includes('results')) {
-      // Countdown takes care of synchronized voice and audio chimes
-    } else if (status === 'round1_results' || status === 'round2_results') {
+    // Explicitly NO celebration/confetti/sound on Round Start (round1, round2, round3)
+    if (status === 'round1_results' || status === 'round2_results') {
       audioManager.playDrumroll(1.3);
       audioManager.playApplauseClapping(4);
       setTimeout(() => audioManager.playRoundEnd(), 1300);
-      triggerChampionsCelebration();
+      triggerRoundResultsCelebration();
     } else if (status === 'final_results') {
       audioManager.playFinalFanfare();
       audioManager.playApplauseClapping(4);
-      triggerChampionsCelebration();
+      triggerFinalChampionsCelebration();
     }
   };
 
