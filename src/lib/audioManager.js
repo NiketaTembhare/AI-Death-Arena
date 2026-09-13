@@ -123,33 +123,60 @@ class AudioManager {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
     try {
-      // Cancel previous speech to prevent overlapping or queuing delay
-      window.speechSynthesis.cancel();
+      this.initContext();
+
+      // Cancel previous speech to prevent queuing overlap
+      try {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+        window.speechSynthesis.cancel();
+      } catch (err) {
+        // ignore cancel error
+      }
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
-      if (this.selectedVoice) {
-        utterance.voice = this.selectedVoice;
-      } else {
-        const voices = window.speechSynthesis.getVoices();
-        if (voices && voices.length > 0) {
-          const fallback = voices.find(v => v.lang.startsWith('en')) || voices[0];
-          utterance.voice = fallback;
-          this.selectedVoice = fallback;
-        }
+
+      // Load available voices dynamically
+      const voices = window.speechSynthesis.getVoices() || [];
+      if (voices.length > 0) {
+        const preferred = voices.find(v =>
+          v.lang.startsWith('en') && (
+            v.name.includes('Google') ||
+            v.name.includes('Natural') ||
+            v.name.includes('Samantha') ||
+            v.name.includes('Jenny') ||
+            v.name.includes('Guy') ||
+            v.name.includes('Aria') ||
+            v.name.includes('Zira') ||
+            v.name.includes('David') ||
+            v.name.includes('Alex') ||
+            v.name.includes('Daniel')
+          )
+        );
+        const englishFallback = voices.find(v => v.lang.startsWith('en'));
+        utterance.voice = preferred || englishFallback || voices[0];
       }
 
-      utterance.rate = options.rate !== undefined ? options.rate : 1.0;
-      utterance.pitch = options.pitch !== undefined ? options.pitch : 1.0;
+      utterance.rate = options.rate !== undefined ? options.rate : 0.95;
+      utterance.pitch = options.pitch !== undefined ? options.pitch : 1.05;
       utterance.volume = options.volume !== undefined ? options.volume : 1.0;
 
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-
-      window.speechSynthesis.speak(utterance);
+      // Small 60ms timeout to ensure cancel() has settled in Chromium engine
+      setTimeout(() => {
+        try {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+          window.speechSynthesis.speak(utterance);
+          console.log('🔊 SpeechSynthesis Speaking:', text);
+        } catch (e) {
+          console.warn('SpeechSynthesis speak error:', e);
+        }
+      }, 60);
     } catch (e) {
-      console.warn('Speech synthesis speak error:', e);
+      console.warn('Speech synthesis outer error:', e);
     }
   }
 
@@ -387,7 +414,7 @@ class AudioManager {
           kickOsc.start();
           kickOsc.stop(this.ctx.currentTime + 0.3);
 
-          // Cymbal shimmer hit
+      // Cymbal shimmer hit
           this.playBeep(1200, 'triangle', 0.35, 0.4);
         } catch (e) {
           // ignore
@@ -396,6 +423,70 @@ class AudioManager {
     } catch (e) {
       console.warn('Error synthesizing drumroll:', e);
     }
+  }
+
+  // 4. Futuristic AI Arena Entrance Intro (Sci-fi Riser + Cyber Chimes + AI Voice)
+  playArenaWelcomeIntro() {
+    if (this.isMuted) return;
+    const nowMs = Date.now();
+    if (this.lastWelcomeTime && (nowMs - this.lastWelcomeTime) < 3000) {
+      return;
+    }
+    this.lastWelcomeTime = nowMs;
+    this.initContext();
+
+    if (this.ctx) {
+      try {
+        const now = this.ctx.currentTime;
+
+        // Sub-bass Kick & Entrance Impact (120Hz -> 35Hz)
+        const subOsc = this.ctx.createOscillator();
+        const subGain = this.ctx.createGain();
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(120, now);
+        subOsc.frequency.exponentialRampToValueAtTime(35, now + 0.55);
+        subGain.gain.setValueAtTime(0.7, now);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+        subOsc.connect(subGain);
+        subGain.connect(this.ctx.destination);
+        subOsc.start(now);
+        subOsc.stop(now + 0.55);
+
+        // Sci-Fi Cyber Riser / Power Charge (200Hz -> 1200Hz)
+        const riserOsc = this.ctx.createOscillator();
+        const riserGain = this.ctx.createGain();
+        riserOsc.type = 'sawtooth';
+        riserOsc.frequency.setValueAtTime(200, now + 0.05);
+        riserOsc.frequency.exponentialRampToValueAtTime(1200, now + 0.4);
+        riserGain.gain.setValueAtTime(0.2, now + 0.05);
+        riserGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+
+        riserOsc.connect(riserGain);
+        riserGain.connect(this.ctx.destination);
+        riserOsc.start(now + 0.05);
+        riserOsc.stop(now + 0.42);
+
+        // Futuristic Arpeggio Chime Sweep (A Major Cyber Chord)
+        const chimes = [440, 554.37, 659.25, 880, 1108.73, 1318.51];
+        chimes.forEach((freq, i) => {
+          setTimeout(() => {
+            this.playBeep(freq, 'triangle', 0.22, 0.3);
+          }, 250 + i * 50);
+        });
+      } catch (e) {
+        console.warn('Intro audio effect warning:', e);
+      }
+    }
+
+    // AI Voice Announcement: "Welcome to AI Death Arena Battle Ground!"
+    setTimeout(() => {
+      this.speakVoice("Welcome to AI Death Arena Battle Ground!", {
+        rate: 0.92,
+        pitch: 1.08,
+        volume: 1.0
+      });
+    }, 300);
   }
 }
 

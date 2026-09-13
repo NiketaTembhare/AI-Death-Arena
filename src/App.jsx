@@ -7,7 +7,7 @@ import LeaderboardView from './pages/LeaderboardView';
 import AdminView from './pages/AdminView';
 
 export default function App() {
-  const isEnvMissing = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
+  const isEnvMissing = false;
 
   return (
     <BrowserRouter>

@@ -228,7 +228,7 @@ export default function PlayerView() {
   };
 
   const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {
-    const { data } = await supabase
+    let { data } = await supabase
       .from('match_round_questions')
       .select('question_id, position, questions(*)')
       .eq('match_id', matchId)
@@ -236,17 +236,41 @@ export default function PlayerView() {
       .eq('round', roundNum)
       .order('position', { ascending: true });
 
+    // Fallback for players joining/reconnecting mid-round
+    if (!data || data.length === 0) {
+      const { data: existingMatchQuestions } = await supabase
+        .from('match_round_questions')
+        .select('question_id, position, questions(*)')
+        .eq('match_id', matchId)
+        .eq('round', roundNum)
+        .order('position', { ascending: true });
+
+      if (existingMatchQuestions && existingMatchQuestions.length > 0) {
+        const uniqueMap = new Map();
+        existingMatchQuestions.forEach((q) => {
+          if (!uniqueMap.has(q.question_id)) {
+            uniqueMap.set(q.question_id, q);
+          }
+        });
+        data = Array.from(uniqueMap.values()).slice(0, 5);
+
+        const rowsToInsert = data.map((qItem, idx) => ({
+          match_id: matchId,
+          player_id: playerId,
+          round: roundNum,
+          question_id: qItem.question_id,
+          position: idx + 1
+        }));
+        await supabase.from('match_round_questions').insert(rowsToInsert);
+      }
+    }
+
     if (data && data.length > 0) {
       const formattedQ = data.map((item) => {
         const q = item.questions;
-        let isRealOnLeft = Math.random() > 0.5;
-
+        // Consistent layout across all players (no shuffling or random swapping)
+        const isRealOnLeft = true;
         const rawOptions = q.options ? (typeof q.options === 'string' ? JSON.parse(q.options) : q.options) : [];
-        const shuffledOptions = [...rawOptions];
-        for (let i = shuffledOptions.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffledOptions[i], shuffledOptions[j]] = [shuffledOptions[j], shuffledOptions[i]];
-        }
 
         return {
           id: q.id,
@@ -257,7 +281,7 @@ export default function PlayerView() {
           ai_image_url: q.ai_image_url,
           isRealOnLeft,
           logo_url: q.logo_url,
-          options: shuffledOptions,
+          options: rawOptions,
           correct_option: q.correct_option,
           explanation: q.explanation
         };
@@ -517,7 +541,7 @@ export default function PlayerView() {
 
           <div className="card-light" style={{ width: '100%', maxWidth: '380px' }}>
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <h1 className="brand-title" style={{ fontSize: '1.8rem' }}>AI-DEATH ARENA</h1>
+              <h1 className="brand-title" style={{ fontSize: '1.8rem' }}>AI DEATH ARENA</h1>
               <p style={{ color: '#636E72', fontWeight: 600, fontSize: '0.9rem' }}>JOIN ARENA MATCH</p>
             </div>
 
@@ -746,16 +770,16 @@ export default function PlayerView() {
             </div>
           )}
 
-          {/* ROUND 2: Brand Logo Display (Compact Zero-scroll Layout) */}
+          {/* ROUND 2: Brand Logo Display (Increased Visual Size) */}
           {currentQ.round === 2 && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0 0.5rem 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.5rem 0' }}>
               <div style={{
-                width: '135px',
-                height: '135px',
-                padding: '0.6rem',
+                width: 'clamp(160px, 42vw, 210px)',
+                height: 'clamp(160px, 42vw, 210px)',
+                padding: '0.85rem',
                 background: '#FFFFFF',
-                borderRadius: '20px',
-                boxShadow: '0 6px 20px rgba(108, 92, 231, 0.14), 0 2px 8px rgba(0,0,0,0.05)',
+                borderRadius: '24px',
+                boxShadow: '0 10px 28px rgba(108, 92, 231, 0.18), 0 4px 12px rgba(0,0,0,0.06)',
                 border: '2px solid #EEF2FF',
                 display: 'flex',
                 alignItems: 'center',
@@ -764,7 +788,7 @@ export default function PlayerView() {
                 <img
                   src={currentQ.logo_url}
                   alt="Brand Logo"
-                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  style={{ width: '70%', height: '70%', maxWidth: '75%', maxHeight: '75%', objectFit: 'contain' }}
                   onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.innerHTML = '🤖'; }}
                 />
               </div>
@@ -894,7 +918,7 @@ export default function PlayerView() {
         <Award size={56} color="#FDCB6E" style={{ margin: '0 auto 0.5rem' }} />
         <h2 style={{ fontSize: '2rem' }}>MATCH COMPLETE</h2>
         <p style={{ color: '#636E72', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-          Great effort in the AI-DEATH ARENA!
+          Great effort in AI Death Arena!
         </p>
 
         <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '20px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>

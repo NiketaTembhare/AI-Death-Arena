@@ -9,6 +9,7 @@ import { syncServerClock, getServerTimeMs, getClockOffsetMs } from '../lib/serve
 import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
+import ArenaIntroOverlay from '../components/ArenaIntroOverlay';
 
 export default function MatchConsoleView() {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export default function MatchConsoleView() {
   const [isMuted, setIsMuted] = useState(audioManager.isMuted);
   const [countdownNum, setCountdownNum] = useState(null);
   const [isStartingRound, setIsStartingRound] = useState(false);
+  const [showIntroOverlay, setShowIntroOverlay] = useState(true);
   const previousStatusRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const lastBeepedRef = useRef(null);
@@ -523,17 +525,12 @@ export default function MatchConsoleView() {
       .eq('match_id', matchId)
       .eq('round', roundNum);
 
+    // Select 5 questions sequence ONCE for all players in this session (no shuffling per player)
+    const selectedSequence = [...uniqueQuestionsList].slice(0, 5);
+
     const rowsToInsert = [];
     currentPlayers.forEach((player) => {
-      // Fisher-Yates Shuffle for true uniform random 5 distinct questions
-      const shuffled = [...uniqueQuestionsList];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      const selected = shuffled.slice(0, 5);
-
-      selected.forEach((q, idx) => {
+      selectedSequence.forEach((q, idx) => {
         rowsToInsert.push({
           match_id: matchId,
           player_id: player.id,
@@ -615,6 +612,9 @@ export default function MatchConsoleView() {
 
   return (
     <ArenaBackground>
+      {showIntroOverlay && (
+        <ArenaIntroOverlay onClose={() => setShowIntroOverlay(false)} />
+      )}
       <div style={darkPageStyle}>
         {/* Console Header */}
         <header style={headerStyle}>
@@ -636,7 +636,7 @@ export default function MatchConsoleView() {
             </button>
 
             <div>
-              <h1 className="brand-title" style={{ fontSize: '2rem' }}>AI-DEATH ARENA</h1>
+              <h1 className="brand-title" style={{ fontSize: '2rem' }}>AI DEATH ARENA</h1>
               <p style={{ color: '#A29BFE', fontSize: '0.95rem', fontWeight: 700, letterSpacing: '1px' }}>AI KNOWLEDGE CHECK ⚡ GEN-Z ARENA EDITION</p>
             </div>
           </div>

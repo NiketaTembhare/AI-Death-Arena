@@ -1,17 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const defaultUrl = 'https://utzpigjeqswrnelyuzgs.supabase.co';
+const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0enBpZ2plcXN3cm5lbHl1emdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxOTI3OTgsImV4cCI6MjEwNDc2ODc5OH0.82-D5WZG9QxOFiI2UDR1ccdb0rEGD_-T3_y5e2noeIg';
 
-if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('placeholder')) {
-  console.error('🚨 Supabase URL or Anon Key is missing! Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file and restart Vite with "npm run dev -- --force".');
-} else {
-  console.log('⚡ Supabase Connected:', supabaseUrl);
-}
+const envUrl = import.meta.env.VITE_SUPABASE_URL;
+const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder'
-);
+const supabaseUrl = (envUrl && !envUrl.includes('placeholder')) ? envUrl : defaultUrl;
+const supabaseAnonKey = (envKey && !envKey.includes('placeholder')) ? envKey : defaultKey;
 
+console.log('⚡ Supabase Connected:', supabaseUrl);
 
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

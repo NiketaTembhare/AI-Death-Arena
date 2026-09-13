@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Trophy, Settings, Lock } from 'lucide-react';
+import { audioManager } from '../lib/audioManager';
 
 import ArenaBackground from '../components/ArenaBackground';
 
@@ -9,6 +10,16 @@ export default function HomeView() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
+
+  const handleHostMatch = () => {
+    try {
+      audioManager.initContext();
+      audioManager.playArenaWelcomeIntro();
+    } catch (e) {
+      console.warn('Audio welcome play error:', e);
+    }
+    navigate('/match');
+  };
 
   const handleAdminAccess = (e) => {
     e.preventDefault();
@@ -34,7 +45,7 @@ export default function HomeView() {
       }}>
       <div style={{ textAlign: 'center', maxWidth: '420px', width: '100%' }}>
         <h1 className="brand-title" style={{ fontSize: '2.5rem', marginBottom: '0.25rem' }}>
-          AI-DEATH ARENA
+          AI DEATH ARENA
         </h1>
         <p style={{ color: '#A29BFE', fontSize: '0.95rem', marginBottom: '2.5rem', fontWeight: 600 }}>
           Synchronous Expo Booth Trivia
@@ -42,7 +53,7 @@ export default function HomeView() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <button
-            onClick={() => navigate('/match')}
+            onClick={handleHostMatch}
             className="btn btn-purple"
             style={{ width: '100%', fontSize: '1.25rem', padding: '1.1rem' }}
           >
