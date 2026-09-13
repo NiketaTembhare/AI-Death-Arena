@@ -9,6 +9,7 @@ import { syncServerClock, getServerTimeMs, getClockOffsetMs } from '../lib/serve
 import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
+import ArenaIntroOverlay from '../components/ArenaIntroOverlay';
 
 export default function MatchConsoleView() {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export default function MatchConsoleView() {
   const [isMuted, setIsMuted] = useState(audioManager.isMuted);
   const [countdownNum, setCountdownNum] = useState(null);
   const [isStartingRound, setIsStartingRound] = useState(false);
+  const [showIntroOverlay, setShowIntroOverlay] = useState(true);
   const previousStatusRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const lastBeepedRef = useRef(null);
@@ -492,7 +494,7 @@ export default function MatchConsoleView() {
     }
   };
 
-  // Helper to assign random round questions per player (guaranteeing 5 DISTINCT questions per player per round)
+  // Helper to assign 5 identical round questions to all players (avoiding questions used in the last 3 matches)
   const assignRoundQuestionsForPlayers = async (matchId, roundNum) => {
     const { data: allQuestions } = await supabase
       .from('questions')
@@ -509,6 +511,46 @@ export default function MatchConsoleView() {
 
     if (uniqueQuestionsList.length < 5) return;
 
+    // Fetch question IDs used for this same round in the last 3 matches (excluding current match)
+    const { data: recentMatches } = await supabase
+      .from('matches')
+      .select('id')
+      .neq('id', matchId)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    const recentQuestionIds = new Set();
+    if (recentMatches && recentMatches.length > 0) {
+      const recentMatchIds = recentMatches.map((m) => m.id);
+      const { data: recentAssigned } = await supabase
+        .from('match_round_questions')
+        .select('question_id')
+        .in('match_id', recentMatchIds)
+        .eq('round', roundNum);
+
+      if (recentAssigned && recentAssigned.length > 0) {
+        recentAssigned.forEach((item) => {
+          if (item.question_id) recentQuestionIds.add(item.question_id);
+        });
+      }
+    }
+
+    // Exclude recently used questions from pool
+    let eligibleQuestions = uniqueQuestionsList.filter((q) => !recentQuestionIds.has(q.id));
+
+    // Fallback to full pool if excluding recent questions leaves fewer than 5
+    if (eligibleQuestions.length < 5) {
+      eligibleQuestions = uniqueQuestionsList;
+    }
+
+    // Fisher-Yates Shuffle ONCE for the entire match/round
+    const shuffled = [...eligibleQuestions];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const selectedQuestions = shuffled.slice(0, 5);
+
     const { data: currentPlayers } = await supabase
       .from('match_players')
       .select('id')
@@ -523,17 +565,10 @@ export default function MatchConsoleView() {
       .eq('match_id', matchId)
       .eq('round', roundNum);
 
+    // Assign the exact same 5 questions (in same order/position) to every player
     const rowsToInsert = [];
     currentPlayers.forEach((player) => {
-      // Fisher-Yates Shuffle for true uniform random 5 distinct questions
-      const shuffled = [...uniqueQuestionsList];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      const selected = shuffled.slice(0, 5);
-
-      selected.forEach((q, idx) => {
+      selectedQuestions.forEach((q, idx) => {
         rowsToInsert.push({
           match_id: matchId,
           player_id: player.id,
@@ -615,6 +650,9 @@ export default function MatchConsoleView() {
 
   return (
     <ArenaBackground>
+      {showIntroOverlay && (
+        <ArenaIntroOverlay onClose={() => setShowIntroOverlay(false)} />
+      )}
       <div style={darkPageStyle}>
         {/* Console Header */}
         <header style={headerStyle}>
@@ -636,7 +674,7 @@ export default function MatchConsoleView() {
             </button>
 
             <div>
-              <h1 className="brand-title" style={{ fontSize: '2rem' }}>AI-DEATH ARENA</h1>
+              <h1 className="brand-title" style={{ fontSize: '2rem' }}>AI DEATH ARENA</h1>
               <p style={{ color: '#A29BFE', fontSize: '0.95rem', fontWeight: 700, letterSpacing: '1px' }}>AI KNOWLEDGE CHECK ⚡ GEN-Z ARENA EDITION</p>
             </div>
           </div>
