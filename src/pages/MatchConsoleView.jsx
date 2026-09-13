@@ -1184,22 +1184,22 @@ export default function MatchConsoleView() {
                   </div>
 
                   {/* Question Content */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0.4rem 0' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#FDCB6E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0.5rem 0' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#FDCB6E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                       ROUND {match.current_round} — {match.current_round === 1 ? 'REAL OR FAKE?' : match.current_round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
                     </span>
 
                     <h3 style={{
                       color: '#FFFFFF',
-                      fontSize: 'clamp(1.05rem, 2vw, 1.3rem)',
+                      fontSize: 'clamp(1.15rem, 2.2vw, 1.45rem)',
                       fontWeight: 800,
-                      lineHeight: '1.3',
-                      marginBottom: '0.65rem',
+                      lineHeight: '1.35',
+                      marginBottom: '1rem',
                       maxWidth: '92%'
                     }}>
                       {currentLiveQuestion ? (
-                        currentLiveQuestion.round === 3 && currentLiveQuestion.prompt_text?.length < 10
-                          ? 'WHICH AI CONCEPT DO THESE EMOJIS REPRESENT?'
+                        currentLiveQuestion.round === 3
+                          ? (currentLiveQuestion.prompt_text?.length < 10 ? 'WHICH AI CONCEPT DO THESE EMOJIS REPRESENT?' : currentLiveQuestion.prompt_text)
                           : currentLiveQuestion.prompt_text
                       ) : 'Loading active question...'}
                     </h3>

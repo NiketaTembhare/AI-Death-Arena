@@ -25,8 +25,10 @@ export default function PlayerView() {
   // Match & Gameplay State
   const [match, setMatch] = useState(null);
   const [questions, setQuestions] = useState([]);
-  const [nowMs, setNowMs] = useState(getServerTimeMs());
-  const [submittedAnswersMap, setSubmittedAnswersMap] = useState({});
+  const [currentQIndex, setCurrentQIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
+  const [answerResult, setAnswerResult] = useState(null);
 
   // Direct Calculated Scores
   const [playerScore, setPlayerScore] = useState(0);
@@ -34,9 +36,14 @@ export default function PlayerView() {
   const [roundScore, setRoundScore] = useState(0);
   const [roundCorrect, setRoundCorrect] = useState(0);
 
-  // Synchronized Timers & Countdown Refs
+  // Synchronized Timers & Countdown
+  const [countdownNum, setCountdownNum] = useState(null);
+  const [timeLeftSec, setTimeLeftSec] = useState(15);
+  const questionStartTimeRef = useRef(getServerTimeMs());
+  const timerIntervalRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
   const lastBeepedRef = useRef(null);
-  const lastPlayerUrgencyKeyRef = useRef(null);
+  const lastCountdownRoundRef = useRef(null);
 
   // 1. Initialize Device Token & Server Clock Sync
   useEffect(() => {
@@ -56,6 +63,15 @@ export default function PlayerView() {
     if (completedToday === todayStr) {
       setIsRepeatPlayer(true);
     }
+
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
   }, []);
 
   // 2. Fetch Match by Room Code & Re-hydrate player
@@ -89,7 +105,7 @@ export default function PlayerView() {
     }
   };
 
-  // 3. Realtime Subscription for Match updates & Tick Interval
+  // 3. Realtime Subscription for Match updates
   useEffect(() => {
     if (!match?.id) return;
 
@@ -105,62 +121,11 @@ export default function PlayerView() {
     };
   }, [match?.id]);
 
-  useEffect(() => {
-    if (match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3') {
-      const interval = setInterval(() => {
-        setNowMs(getServerTimeMs());
-      }, 200);
-      return () => clearInterval(interval);
-    }
-  }, [match?.status]);
-
-  // Synchronized Timing & Question Calculations
-  const isRoundActive = match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3';
-  const startedAtMs = (isRoundActive && match?.round_started_at) ? new Date(match.round_started_at).getTime() : nowMs;
-  const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
-  const isCountdownActive = isRoundActive && elapsedSec < 4.5;
-  const gameElapsedSec = isCountdownActive ? 0 : Math.max(0, elapsedSec - 4.5);
-  const currentQIndex = Math.min(4, Math.floor(gameElapsedSec / 10));
-  const timeLeftSec = isCountdownActive ? 10 : (gameElapsedSec >= 50 ? 0 : Math.max(0, Math.ceil(10 - (gameElapsedSec % 10))));
-  const isFinishedRoundQuestions = isRoundActive && gameElapsedSec >= 50;
-  const currentQ = questions[currentQIndex] || null;
-
-  const submittedInfo = currentQ ? submittedAnswersMap[currentQ.id] : null;
-  const isAnswerSubmitted = Boolean(submittedInfo);
-  const selectedOption = submittedInfo?.selectedOption || null;
-  const answerResult = submittedInfo ? {
-    isCorrect: submittedInfo.isCorrect,
-    correctOption: submittedInfo.correctOption,
-    points: submittedInfo.points,
-    explanation: submittedInfo.explanation
-  } : null;
-  const countdownNum = isCountdownActive ? Math.max(0, Math.ceil(4.5 - elapsedSec)) : null;
-
-  // Sound Effects: 3-2-1 Countdown Beeps
-  useEffect(() => {
-    if (!isCountdownActive || countdownNum === null) return;
-    if (lastBeepedRef.current !== countdownNum) {
-      lastBeepedRef.current = countdownNum;
-      audioManager.playCountdownBeep(countdownNum);
-    }
-  }, [isCountdownActive, countdownNum]);
-
-  // Sound Effects: Urgency Ticks on last 5 seconds of every question
-  useEffect(() => {
-    if (!isRoundActive || isCountdownActive || isFinishedRoundQuestions) return;
-    if (timeLeftSec <= 5 && timeLeftSec > 0) {
-      const key = `${match?.current_round}_${currentQIndex}_${timeLeftSec}`;
-      if (lastPlayerUrgencyKeyRef.current !== key) {
-        lastPlayerUrgencyKeyRef.current = key;
-        audioManager.playUrgencyTick(timeLeftSec);
-      }
-    }
-  }, [isRoundActive, isCountdownActive, isFinishedRoundQuestions, match?.current_round, currentQIndex, timeLeftSec]);
-
   // 4. Compute Player Score, Rank, and Round Stats directly from match_answers table
   const fetchPlayerDirectStats = async (matchId, playerId, currentRound) => {
     if (!matchId || !playerId) return;
 
+    // Fetch answers for all players in this match to compute rank & total score
     const { data: allAnswers } = await supabase
       .from('match_answers')
       .select('player_id, round, is_correct, points_earned')
@@ -189,6 +154,7 @@ export default function PlayerView() {
       if (myRankIndex !== -1) setPlayerRank(myRankIndex + 1);
     }
 
+    // Compute specific round stats for this player
     if (currentRound) {
       const roundAnswers = answers.filter((a) => a.player_id === playerId && a.round === Number(currentRound));
       const rScore = roundAnswers.reduce((sum, a) => sum + (a.points_earned || 0), 0);
@@ -198,7 +164,7 @@ export default function PlayerView() {
     }
   };
 
-  // 5. Handle Round Changes
+  // 5. Handle Round Changes & Countdown
   useEffect(() => {
     if (!match || !player) return;
 
@@ -206,6 +172,21 @@ export default function PlayerView() {
 
     if (match.status === 'round1' || match.status === 'round2' || match.status === 'round3') {
       fetchPlayerQuestions(match.id, player.id, match.current_round);
+
+      const roundKey = `${match.current_round}_${match.round_started_at || match.status}`;
+      if (lastCountdownRoundRef.current !== roundKey) {
+        lastCountdownRoundRef.current = roundKey;
+
+        const startedAtMs = match.round_started_at ? new Date(match.round_started_at).getTime() : Date.now();
+        const elapsedMs = Date.now() - startedAtMs;
+
+        if (elapsedMs < 4500) {
+          triggerSynchronizedCountdown();
+        } else {
+          setCountdownNum(null);
+          startPerQuestionTimer(15);
+        }
+      }
     } else if (match.status === 'final_results') {
       const todayStr = new Date().toISOString().split('T')[0];
       localStorage.setItem('arena_completed_date', todayStr);
@@ -213,6 +194,39 @@ export default function PlayerView() {
       audioManager.playApplauseClapping(3);
     }
   }, [match?.status, match?.round_started_at, player?.id]);
+
+  const triggerSynchronizedCountdown = () => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    lastBeepedRef.current = null;
+
+    let step = 3;
+    setCountdownNum(3);
+    if (lastBeepedRef.current !== 3) {
+      lastBeepedRef.current = 3;
+      audioManager.playCountdownBeep(3);
+    }
+
+    countdownIntervalRef.current = setInterval(() => {
+      step -= 1;
+      if (step >= 0) {
+        setCountdownNum(step);
+        if (lastBeepedRef.current !== step) {
+          lastBeepedRef.current = step;
+          audioManager.playCountdownBeep(step);
+        }
+      } else {
+        setCountdownNum(null);
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        startPerQuestionTimer(15);
+      }
+    }, 950);
+  };
 
   const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {
     let { data } = await supabase
@@ -223,6 +237,7 @@ export default function PlayerView() {
       .eq('round', roundNum)
       .order('position', { ascending: true });
 
+    // Fallback for players joining/reconnecting mid-round
     if (!data || data.length === 0) {
       const { data: existingMatchQuestions } = await supabase
         .from('match_round_questions')
@@ -276,36 +291,67 @@ export default function PlayerView() {
 
       const { data: answeredRows } = await supabase
         .from('match_answers')
-        .select('question_id, selected_option, is_correct, points_earned')
+        .select('question_id')
         .eq('match_id', matchId)
         .eq('player_id', playerId)
         .eq('round', roundNum);
 
-      const map = {};
-      if (answeredRows) {
-        answeredRows.forEach((row) => {
-          const qObj = formattedQ.find((fq) => fq.id === row.question_id);
-          map[row.question_id] = {
-            selectedOption: row.selected_option,
-            isCorrect: row.is_correct,
-            points: row.points_earned,
-            correctOption: qObj ? (qObj.round === 1 ? 'AI Image' : qObj.correct_option) : '',
-            explanation: qObj?.explanation || ''
-          };
-        });
-      }
+      const answeredCount = answeredRows ? answeredRows.length : 0;
+      const resumeIndex = Math.min(answeredCount, formattedQ.length - 1);
 
       setQuestions(formattedQ);
-      setSubmittedAnswersMap(map);
+      setCurrentQIndex(resumeIndex);
+      if (answeredCount >= formattedQ.length) {
+        setIsAnswerSubmitted(true);
+      } else {
+        setIsAnswerSubmitted(false);
+      }
+      setSelectedOption(null);
+      setAnswerResult(null);
     }
   };
 
-  const submitAnswer = async (chosenOption) => {
-    if (!currentQ || !match || !player) return;
-    if (submittedAnswersMap[currentQ.id]) return; // Answer already submitted for this question!
+  const startPerQuestionTimer = (durationSec = 15) => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    questionStartTimeRef.current = getServerTimeMs();
+    const targetEndMs = getServerTimeMs() + durationSec * 1000;
+    let lastUrgencySec = null;
 
-    const qStartTimeMs = startedAtMs + 4500 + currentQIndex * 10000;
-    const responseTimeMs = Math.min(10000, Math.max(0, getServerTimeMs() - qStartTimeMs));
+    setTimeLeftSec(durationSec);
+
+    timerIntervalRef.current = setInterval(() => {
+      const remainingMs = targetEndMs - getServerTimeMs();
+      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      setTimeLeftSec(remainingSec);
+
+      // Play rising urgency warning tick on the last 5 seconds (5, 4, 3, 2, 1)
+      if (remainingSec <= 5 && remainingSec > 0 && lastUrgencySec !== remainingSec) {
+        lastUrgencySec = remainingSec;
+        audioManager.playUrgencyTick(remainingSec);
+      }
+
+      if (remainingMs <= 0) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+        handleTimeoutOrAutoAdvance();
+      }
+    }, 150);
+  };
+
+  const submitAnswer = async (chosenOption) => {
+    if (isAnswerSubmitted || !match || !player || !questions[currentQIndex]) return;
+
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
+    setIsAnswerSubmitted(true);
+    setSelectedOption(chosenOption);
+
+    const currentQ = questions[currentQIndex];
+    const responseTimeMs = getServerTimeMs() - questionStartTimeRef.current;
 
     let isCorrect = false;
     if (currentQ.round === 1) {
@@ -316,25 +362,19 @@ export default function PlayerView() {
 
     let points = 0;
     if (isCorrect) {
-      const speedBonus = Math.max(0, Math.round((10000 - responseTimeMs) / 200));
+      const speedBonus = Math.max(0, Math.round((15000 - responseTimeMs) / 300));
       points = 100 + speedBonus;
       audioManager.playCorrect();
     } else {
       audioManager.playWrong();
     }
 
-    const resultObj = {
-      selectedOption: chosenOption,
+    setAnswerResult({
       isCorrect,
       correctOption: currentQ.round === 1 ? 'AI Image' : currentQ.correct_option,
       points,
       explanation: currentQ.explanation
-    };
-
-    setSubmittedAnswersMap((prev) => ({
-      ...prev,
-      [currentQ.id]: resultObj
-    }));
+    });
 
     try {
       await supabase.from('match_answers').insert([
@@ -350,12 +390,34 @@ export default function PlayerView() {
         }
       ]);
 
+      // Instantly refresh player direct score & rank after submitting answer
       fetchPlayerDirectStats(match.id, player.id, match.current_round);
     } catch (err) {
       console.error('Error saving answer:', err);
     }
-    // CRITICAL: Answer submission NEVER advances the question!
-    // Question progression is strictly controlled by 10s timer expiry.
+
+    setTimeout(() => {
+      advanceToNextQuestion();
+    }, 2500);
+  };
+
+  const handleTimeoutOrAutoAdvance = () => {
+    if (!isAnswerSubmitted) {
+      submitAnswer('TIMEOUT');
+    }
+  };
+
+  const advanceToNextQuestion = () => {
+    if (currentQIndex < questions.length - 1) {
+      setCurrentQIndex((prev) => prev + 1);
+      setIsAnswerSubmitted(false);
+      setSelectedOption(null);
+      setAnswerResult(null);
+      startPerQuestionTimer(15);
+    } else {
+      setIsAnswerSubmitted(true);
+      fetchPlayerDirectStats(match.id, player.id, match.current_round);
+    }
   };
 
   const handleJoinGame = async (e) => {
@@ -573,6 +635,10 @@ export default function PlayerView() {
   }
 
   // 3. GAMEPLAY SCREENS (ROUNDS 1, 2, 3)
+  const currentQ = questions[currentQIndex];
+  const isRoundActive = (match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3');
+  const isFinishedRoundQuestions = isAnswerSubmitted && currentQIndex === 4;
+
   if (isRoundActive && currentQ && !isFinishedRoundQuestions) {
     const avatar = getPlayerAvatar(player.display_name);
 

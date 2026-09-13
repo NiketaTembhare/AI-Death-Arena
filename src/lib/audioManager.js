@@ -237,13 +237,6 @@ class AudioManager {
     this.speakCountdown(number);
   }
 
-  playUrgencyTick(sec) {
-    if (this.isMuted) return;
-    const freqs = { 5: 523.25, 4: 659.25, 3: 783.99, 2: 880, 1: 1046.5 };
-    const freq = freqs[sec] || 440;
-    this.playBeep(freq, 'sine', 0.12, 0.35);
-  }
-
   playCorrect() {
     if (this.isMuted) return;
     this.initContext();
@@ -306,7 +299,7 @@ class AudioManager {
 
       for (let i = 0; i < totalClaps; i++) {
         const clapTime = now + (Math.random() * durationSec);
-        
+
         const whiteNoise = this.ctx.createBufferSource();
         whiteNoise.buffer = noiseBuffer;
 
@@ -421,7 +414,7 @@ class AudioManager {
           kickOsc.start();
           kickOsc.stop(this.ctx.currentTime + 0.3);
 
-      // Cymbal shimmer hit
+          // Cymbal shimmer hit
           this.playBeep(1200, 'triangle', 0.35, 0.4);
         } catch (e) {
           // ignore
