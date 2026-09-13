@@ -494,8 +494,43 @@ export default function MatchConsoleView() {
     }
   };
 
-  // Helper to assign random round questions per player (guaranteeing 5 DISTINCT questions per player per round)
+  // Helper to assign random round questions per player (guaranteeing 5 DISTINCT questions per player per round, same set & order for all players, avoiding recent matches)
   const assignRoundQuestionsForPlayers = async (matchId, roundNum) => {
+    // 1 & 2. Load current players
+    const { data: currentPlayers } = await supabase
+      .from('match_players')
+      .select('id')
+      .eq('match_id', matchId);
+
+    if (!currentPlayers || currentPlayers.length === 0) return;
+
+    // 3. Find the last 3 previous matches, excluding the current match
+    const { data: recentMatches } = await supabase
+      .from('matches')
+      .select('id')
+      .neq('id', matchId)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    const recentMatchIds = (recentMatches || []).map((m) => m.id);
+
+    // 4. Find question IDs used in the same round of those previous matches
+    let recentQuestionIds = new Set();
+    if (recentMatchIds.length > 0) {
+      const { data: recentRoundQuestions } = await supabase
+        .from('match_round_questions')
+        .select('question_id')
+        .in('match_id', recentMatchIds)
+        .eq('round', roundNum);
+
+      if (recentRoundQuestions && recentRoundQuestions.length > 0) {
+        recentRoundQuestions.forEach((r) => {
+          if (r.question_id) recentQuestionIds.add(r.question_id);
+        });
+      }
+    }
+
+    // 5. Load the active question pool for this round
     const { data: allQuestions } = await supabase
       .from('questions')
       .select('id')
@@ -507,30 +542,39 @@ export default function MatchConsoleView() {
     // Deduplicate available question pool by ID
     const uniqueQuestionsMap = new Map();
     allQuestions.forEach((q) => uniqueQuestionsMap.set(q.id, q));
-    const uniqueQuestionsList = Array.from(uniqueQuestionsMap.values());
+    const fullPool = Array.from(uniqueQuestionsMap.values());
 
-    if (uniqueQuestionsList.length < 5) return;
+    if (fullPool.length < 5) return;
 
-    const { data: currentPlayers } = await supabase
-      .from('match_players')
-      .select('id')
-      .eq('match_id', matchId);
+    // 6. Remove recently used question IDs from the pool
+    let eligiblePool = fullPool.filter((q) => !recentQuestionIds.has(q.id));
 
-    if (!currentPlayers || currentPlayers.length === 0) return;
+    // 7. Fallback: If fewer than 5 remain, use the full active question pool
+    if (eligiblePool.length < 5) {
+      eligiblePool = [...fullPool];
+    }
 
-    // Delete any existing assignments for this match & round to avoid duplicates
+    // 8. Shuffle the eligible pool once
+    const shuffled = [...eligiblePool];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    // 9. Select exactly 5 question IDs
+    const selectedQuestions = shuffled.slice(0, 5);
+
+    // 10. Delete old assignments for this match and round
     await supabase
       .from('match_round_questions')
       .delete()
       .eq('match_id', matchId)
       .eq('round', roundNum);
 
-    // Select 5 questions sequence ONCE for all players in this session (no shuffling per player)
-    const selectedSequence = [...uniqueQuestionsList].slice(0, 5);
-
+    // 11. Loop through currentPlayers: Insert the same 5 question IDs in the same order for each player
     const rowsToInsert = [];
     currentPlayers.forEach((player) => {
-      selectedSequence.forEach((q, idx) => {
+      selectedQuestions.forEach((q, idx) => {
         rowsToInsert.push({
           match_id: matchId,
           player_id: player.id,
@@ -541,6 +585,7 @@ export default function MatchConsoleView() {
       });
     });
 
+    // 12. Insert rows and return
     if (rowsToInsert.length > 0) {
       await supabase.from('match_round_questions').insert(rowsToInsert);
     }
