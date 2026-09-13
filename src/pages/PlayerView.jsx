@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
 import { syncServerClock, getServerTimeMs, getClockOffsetMs } from '../lib/serverClock';
+import { getSeededShuffledOptions, getSeededIsRealOnLeft } from '../lib/questionUtils';
 import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
@@ -268,9 +269,10 @@ export default function PlayerView() {
     if (data && data.length > 0) {
       const formattedQ = data.map((item) => {
         const q = item.questions;
-        // Consistent layout across all players (no shuffling or random swapping)
-        const isRealOnLeft = true;
+        const seedStr = `${matchId}_${q.id}`;
         const rawOptions = q.options ? (typeof q.options === 'string' ? JSON.parse(q.options) : q.options) : [];
+        const shuffledOptions = q.round === 1 ? [] : getSeededShuffledOptions(rawOptions, seedStr);
+        const isRealOnLeft = q.round === 1 ? getSeededIsRealOnLeft(seedStr) : true;
 
         return {
           id: q.id,
@@ -281,7 +283,7 @@ export default function PlayerView() {
           ai_image_url: q.ai_image_url,
           isRealOnLeft,
           logo_url: q.logo_url,
-          options: rawOptions,
+          options: shuffledOptions,
           correct_option: q.correct_option,
           explanation: q.explanation
         };
