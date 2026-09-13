@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
 import { syncServerClock, getServerTimeMs, getClockOffsetMs } from '../lib/serverClock';
-import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft } from 'lucide-react';
+import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft, Clock } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
 import ArenaIntroOverlay from '../components/ArenaIntroOverlay';
@@ -18,6 +18,8 @@ export default function MatchConsoleView() {
   const [players, setPlayers] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [answeredCount, setAnsweredCount] = useState(0);
+  const [activeRoundQuestions, setActiveRoundQuestions] = useState([]);
+  const [nowMs, setNowMs] = useState(getServerTimeMs());
   const [isMuted, setIsMuted] = useState(audioManager.isMuted);
   const [countdownNum, setCountdownNum] = useState(null);
   const [isStartingRound, setIsStartingRound] = useState(false);
@@ -215,6 +217,55 @@ export default function MatchConsoleView() {
     setLeaderboard(aggregated);
     setAnsweredCount(donePlayersCount);
   };
+
+  // 3. Fetch active round questions for Host Display
+  const fetchActiveRoundQuestions = async (matchId, currentRound) => {
+    if (!matchId || !currentRound || Number(currentRound) <= 0) {
+      setActiveRoundQuestions([]);
+      return;
+    }
+    const { data } = await supabase
+      .from('match_round_questions')
+      .select('question_id, position, questions(*)')
+      .eq('match_id', matchId)
+      .eq('round', Number(currentRound))
+      .order('position', { ascending: true });
+
+    if (data && data.length > 0) {
+      const uniqueMap = new Map();
+      data.forEach((item) => {
+        if (item.questions && !uniqueMap.has(item.question_id)) {
+          uniqueMap.set(item.question_id, item.questions);
+        }
+      });
+      setActiveRoundQuestions(Array.from(uniqueMap.values()));
+    } else {
+      const { data: pool } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('round', Number(currentRound))
+        .eq('is_active', true)
+        .order('id', { ascending: true })
+        .limit(5);
+
+      if (pool) setActiveRoundQuestions(pool);
+    }
+  };
+
+  useEffect(() => {
+    if (match?.id && match?.current_round && Number(match.current_round) > 0) {
+      fetchActiveRoundQuestions(match.id, match.current_round);
+    }
+  }, [match?.id, match?.current_round, match?.status]);
+
+  useEffect(() => {
+    if (match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3') {
+      const interval = setInterval(() => {
+        setNowMs(getServerTimeMs());
+      }, 250);
+      return () => clearInterval(interval);
+    }
+  }, [match?.status]);
 
   const DARK_BRIGHT_COLORS = ['#F59E0B', '#7C3AED', '#EC4899', '#06B6D4', '#EF4444', '#10B981', '#F97316'];
   const CELEBRATION_EMOJIS = ['👏🏻', '👏🏼', '✨', '💸', '🥳', '🎉', '🎊', '🪩'];
@@ -655,6 +706,15 @@ export default function MatchConsoleView() {
 
   const joinUrl = match ? `${window.location.origin}/play?room=${match.room_code}` : '';
 
+  const isRoundActive = match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3';
+  const startedAtMs = (isRoundActive && match?.round_started_at) ? new Date(match.round_started_at).getTime() : nowMs;
+  const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
+  const isCountdownActive = elapsedSec < 4.5;
+  const gameElapsedSec = isCountdownActive ? 0 : elapsedSec - 4.5;
+  const currentQIndex = Math.min(4, Math.floor(gameElapsedSec / 15));
+  const questionTimeLeftSec = isCountdownActive ? 15 : Math.max(0, Math.ceil(15 - (gameElapsedSec % 15)));
+  const currentLiveQuestion = activeRoundQuestions[currentQIndex] || null;
+
   return (
     <ArenaBackground>
       {showIntroOverlay && (
@@ -836,70 +896,137 @@ export default function MatchConsoleView() {
 
         {/* STATE C: ROUND IN PROGRESS / BETWEEN ROUNDS */}
         {match && match.status !== 'lobby' && match.status !== 'final_results' && match.status !== 'archived' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {/* Host Controls & Round Banner */}
-            <div className="card-console" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ color: '#FDCB6E', fontWeight: 800, fontSize: '1rem', letterSpacing: '1px' }}>
-                  CURRENT MATCH STATUS
-                </span>
-                <h2 style={{ fontSize: '2rem', textTransform: 'uppercase', color: '#FFFFFF' }}>
-                  {match.status.replace('_', ' ')}
-                </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Host Controls & Round Banner (Current Match Status Card) */}
+            <div
+              className="card-console"
+              style={{
+                width: '94%',
+                margin: '0 auto',
+                padding: '1.1rem 1.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}
+            >
+              {/* Top Row: Header Label, Answered Progress & Progression Button */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '1rem', flexWrap: 'wrap' }}>
+                <div>
+                  <span style={{ color: '#FDCB6E', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '1px' }}>
+                    CURRENT MATCH STATUS
+                  </span>
+                  <h2 style={{ fontSize: '1.75rem', textTransform: 'uppercase', color: '#FFFFFF', lineHeight: '1.1' }}>
+                    {match.status.replace('_', ' ')}
+                  </h2>
+                </div>
+
+                {/* Answered Progress Indicator for Host */}
+                {(match.status === 'round1' || match.status === 'round2' || match.status === 'round3') && (
+                  <div style={{ background: '#161334', border: '1px solid #00B894', padding: '0.4rem 1rem', borderRadius: '14px', textAlign: 'center' }}>
+                    <span style={{ color: '#A29BFE', fontSize: '0.75rem', fontWeight: 700, display: 'block' }}>ANSWERED PROGRESS</span>
+                    <strong style={{ fontSize: '1.15rem', color: '#00B894' }}>
+                      {answeredCount} / {players.length} Players Done
+                    </strong>
+                  </div>
+                )}
+
+                {/* Sequential Round Progression Controls */}
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  {match.status === 'round1' && (
+                    <button onClick={() => updateMatchStatus('round1_results', 1)} className="btn btn-orange" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}>
+                      SHOW ROUND 1 RESULTS <ArrowRight size={18} />
+                    </button>
+                  )}
+
+                  {match.status === 'round1_results' && (
+                    <button
+                      disabled={isStartingRound || countdownNum !== null}
+                      onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round2', 2)}
+                      className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
+                      style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}
+                    >
+                      {isStartingRound || countdownNum !== null ? 'STARTING ROUND 2...' : 'START ROUND 2'} <Play size={18} />
+                    </button>
+                  )}
+
+                  {match.status === 'round2' && (
+                    <button onClick={() => updateMatchStatus('round2_results', 2)} className="btn btn-orange" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}>
+                      SHOW ROUND 2 RESULTS <ArrowRight size={18} />
+                    </button>
+                  )}
+
+                  {match.status === 'round2_results' && (
+                    <button
+                      disabled={isStartingRound || countdownNum !== null}
+                      onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round3', 3)}
+                      className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
+                      style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}
+                    >
+                      {isStartingRound || countdownNum !== null ? 'STARTING ROUND 3...' : 'START ROUND 3'} <Play size={18} />
+                    </button>
+                  )}
+
+                  {match.status === 'round3' && (
+                    <button onClick={() => updateMatchStatus('final_results', 3)} className="btn btn-yellow" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem', color: '#2D3436' }}>
+                      SHOW FINAL RESULTS <Award size={18} />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Answered Progress Indicator for Host */}
+              {/* Live Question Display (Embedded inside Current Match Status panel) */}
               {(match.status === 'round1' || match.status === 'round2' || match.status === 'round3') && (
-                <div style={{ background: '#161334', border: '1px solid #00B894', padding: '0.5rem 1.25rem', borderRadius: '16px', textAlign: 'center' }}>
-                  <span style={{ color: '#A29BFE', fontSize: '0.8rem', fontWeight: 700, display: 'block' }}>ANSWERED PROGRESS</span>
-                  <strong style={{ fontSize: '1.25rem', color: '#00B894' }}>
-                    {answeredCount} / {players.length} Players Done
-                  </strong>
+                <div style={{
+                  background: '#161334',
+                  border: '1px solid #2D2856',
+                  borderRadius: '14px',
+                  padding: '0.6rem 1rem',
+                  marginTop: '0.15rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.25rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{
+                      background: 'rgba(108, 92, 231, 0.25)',
+                      border: '1px solid #6C5CE7',
+                      color: '#A29BFE',
+                      padding: '0.15rem 0.6rem',
+                      borderRadius: '999px',
+                      fontSize: '0.8rem',
+                      fontWeight: 800,
+                      letterSpacing: '0.5px'
+                    }}>
+                      QUESTION {currentQIndex + 1} / {activeRoundQuestions.length || 5}
+                    </span>
+
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      color: questionTimeLeftSec <= 5 ? '#FF7675' : '#00B894',
+                      fontSize: '0.9rem',
+                      fontWeight: 800
+                    }}>
+                      <Clock size={15} /> {questionTimeLeftSec}s
+                    </span>
+                  </div>
+
+                  <p style={{
+                    color: '#FFFFFF',
+                    fontSize: '1.05rem',
+                    fontWeight: 700,
+                    margin: 0,
+                    lineHeight: '1.3'
+                  }}>
+                    {currentLiveQuestion ? (
+                      currentLiveQuestion.round === 3 && currentLiveQuestion.prompt_text?.length < 10
+                        ? `Which AI concept do these emojis represent? ${currentLiveQuestion.prompt_text}`
+                        : currentLiveQuestion.prompt_text
+                    ) : 'Loading active question...'}
+                  </p>
                 </div>
               )}
-
-              {/* Sequential Round Progression Controls */}
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                {match.status === 'round1' && (
-                  <button onClick={() => updateMatchStatus('round1_results', 1)} className="btn btn-orange" style={{ fontSize: '1.1rem' }}>
-                    SHOW ROUND 1 RESULTS <ArrowRight size={20} />
-                  </button>
-                )}
-
-                {match.status === 'round1_results' && (
-                  <button
-                    disabled={isStartingRound || countdownNum !== null}
-                    onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round2', 2)}
-                    className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
-                    style={{ fontSize: '1.1rem' }}
-                  >
-                    {isStartingRound || countdownNum !== null ? 'STARTING ROUND 2...' : 'START ROUND 2'} <Play size={20} />
-                  </button>
-                )}
-
-                {match.status === 'round2' && (
-                  <button onClick={() => updateMatchStatus('round2_results', 2)} className="btn btn-orange" style={{ fontSize: '1.1rem' }}>
-                    SHOW ROUND 2 RESULTS <ArrowRight size={20} />
-                  </button>
-                )}
-
-                {match.status === 'round2_results' && (
-                  <button
-                    disabled={isStartingRound || countdownNum !== null}
-                    onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round3', 3)}
-                    className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
-                    style={{ fontSize: '1.1rem' }}
-                  >
-                    {isStartingRound || countdownNum !== null ? 'STARTING ROUND 3...' : 'START ROUND 3'} <Play size={20} />
-                  </button>
-                )}
-
-                {match.status === 'round3' && (
-                  <button onClick={() => updateMatchStatus('final_results', 3)} className="btn btn-yellow" style={{ fontSize: '1.1rem', color: '#2D3436' }}>
-                    SHOW FINAL RESULTS <Award size={20} />
-                  </button>
-                )}
-              </div>
             </div>
 
             {/* Live Re-sorting Leaderboard */}
