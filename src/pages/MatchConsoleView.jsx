@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
 import { syncServerClock, getServerTimeMs, getClockOffsetMs } from '../lib/serverClock';
+import { getSeededShuffledOptions, getSeededIsRealOnLeft } from '../lib/questionUtils';
 import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft, Clock } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
@@ -1149,31 +1150,58 @@ export default function MatchConsoleView() {
                   </div>
 
                   {/* Question Content */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0.5rem 0' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#FDCB6E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0.4rem 0' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#FDCB6E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
                       ROUND {match.current_round} — {match.current_round === 1 ? 'REAL OR FAKE?' : match.current_round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
                     </span>
 
                     <h3 style={{
                       color: '#FFFFFF',
-                      fontSize: 'clamp(1.15rem, 2.2vw, 1.45rem)',
+                      fontSize: 'clamp(1.05rem, 2vw, 1.3rem)',
                       fontWeight: 800,
-                      lineHeight: '1.35',
-                      marginBottom: '1rem',
+                      lineHeight: '1.3',
+                      marginBottom: '0.65rem',
                       maxWidth: '92%'
                     }}>
                       {currentLiveQuestion ? (
-                        currentLiveQuestion.round === 3
-                          ? (currentLiveQuestion.prompt_text?.length < 10 ? 'WHICH AI CONCEPT DO THESE EMOJIS REPRESENT?' : currentLiveQuestion.prompt_text)
+                        currentLiveQuestion.round === 3 && currentLiveQuestion.prompt_text?.length < 10
+                          ? 'WHICH AI CONCEPT DO THESE EMOJIS REPRESENT?'
                           : currentLiveQuestion.prompt_text
                       ) : 'Loading active question...'}
                     </h3>
 
-                    {/* Large Emojis Display for Round 3 or Emoji Clues */}
-                    {currentLiveQuestion && (currentLiveQuestion.round === 3 || currentLiveQuestion.prompt_text?.match(/\p{Extended_Pictographic}/u)) && (
-                      <div style={{ margin: '1rem 0' }}>
+                    {/* ROUND 2: Brand Logo Display (Fixed Visibility on Host) */}
+                    {currentLiveQuestion && currentLiveQuestion.round === 2 && currentLiveQuestion.logo_url && (
+                      <div style={{
+                        background: '#FFFFFF',
+                        borderRadius: '20px',
+                        padding: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 'clamp(130px, 15vw, 170px)',
+                        height: 'clamp(130px, 15vw, 170px)',
+                        margin: '0.4rem 0 0.6rem 0',
+                        boxShadow: '0 10px 28px rgba(108, 92, 231, 0.25), 0 4px 12px rgba(0,0,0,0.12)',
+                        border: '3px solid #EEF2FF'
+                      }}>
+                        <img
+                          src={currentLiveQuestion.logo_url}
+                          alt="Brand Logo"
+                          style={{ width: '80%', height: '80%', maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            if (e.target.parentNode) e.target.parentNode.innerHTML = '<span style="font-size:3rem;">🤖</span>';
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* ROUND 3: Large Emojis Display */}
+                    {currentLiveQuestion && currentLiveQuestion.round === 3 && (
+                      <div style={{ margin: '0.5rem 0 0.75rem 0' }}>
                         <span style={{
-                          fontSize: 'clamp(3.8rem, 8vw, 5.2rem)',
+                          fontSize: 'clamp(3.5rem, 7vw, 4.8rem)',
                           filter: 'drop-shadow(0 6px 18px rgba(0,0,0,0.4))',
                           lineHeight: 1,
                           letterSpacing: '0.25em'
@@ -1182,6 +1210,89 @@ export default function MatchConsoleView() {
                         </span>
                       </div>
                     )}
+
+                    {/* ROUND 1: Answer Options Cards Displayed on Host (Display-Only for Audience) */}
+                    {currentLiveQuestion && currentLiveQuestion.round === 1 && (() => {
+                      const seedStr = `${match.id}_${currentLiveQuestion.id}`;
+                      
+                      // Check if question has real_image_url & ai_image_url (Image Comparison format)
+                      if (currentLiveQuestion.real_image_url || currentLiveQuestion.ai_image_url) {
+                        const isRealOnLeft = getSeededIsRealOnLeft(seedStr);
+                        const imgA = isRealOnLeft ? currentLiveQuestion.real_image_url : currentLiveQuestion.ai_image_url;
+                        const imgB = isRealOnLeft ? currentLiveQuestion.ai_image_url : currentLiveQuestion.real_image_url;
+
+                        return (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', width: '100%', maxWidth: '400px', margin: '0.35rem 0' }}>
+                            <div style={{
+                              background: '#161334',
+                              border: '2px solid #2D2856',
+                              borderRadius: '14px',
+                              overflow: 'hidden',
+                              height: '110px',
+                              position: 'relative'
+                            }}>
+                              <img src={imgA} alt="Option A" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.src = 'https://via.placeholder.com/200x120?text=Image+A'; }} />
+                              <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.75)', color: '#FFF', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 800 }}>
+                                IMAGE A
+                              </span>
+                            </div>
+                            <div style={{
+                              background: '#161334',
+                              border: '2px solid #2D2856',
+                              borderRadius: '14px',
+                              overflow: 'hidden',
+                              height: '110px',
+                              position: 'relative'
+                            }}>
+                              <img src={imgB} alt="Option B" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.src = 'https://via.placeholder.com/200x120?text=Image+B'; }} />
+                              <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.75)', color: '#FFF', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 800 }}>
+                                IMAGE B
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Otherwise, check if question has options array (Text Choice format)
+                      const rawOptions = currentLiveQuestion.options ? (typeof currentLiveQuestion.options === 'string' ? JSON.parse(currentLiveQuestion.options) : currentLiveQuestion.options) : [];
+                      if (rawOptions && rawOptions.length > 0) {
+                        const shuffledOptions = getSeededShuffledOptions(rawOptions, seedStr);
+                        const colors = ['#FF7675', '#0984E3', '#FDCB6E', '#00B894'];
+                        const letters = ['A', 'B', 'C', 'D'];
+
+                        return (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', width: '100%', maxWidth: '420px', margin: '0.35rem 0' }}>
+                            {shuffledOptions.map((optText, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  background: '#161334',
+                                  border: `2px solid ${colors[idx % 4]}`,
+                                  borderRadius: '12px',
+                                  padding: '0.45rem 0.6rem',
+                                  textAlign: 'center',
+                                  color: '#FFFFFF',
+                                  fontSize: '0.85rem',
+                                  fontWeight: 800,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.4rem'
+                                }}
+                              >
+                                <span style={{ background: colors[idx % 4], color: idx === 2 ? '#2D3436' : '#FFF', padding: '0.15rem 0.45rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 900 }}>
+                                  {letters[idx] || idx + 1}
+                                </span>
+                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                                  {optText}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
+
+                      return null;
+                    })()}
                   </div>
                 </div>
 
