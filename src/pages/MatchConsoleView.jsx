@@ -845,11 +845,45 @@ export default function MatchConsoleView() {
   const isRoundActive = match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3';
   const startedAtMs = (isRoundActive && match?.round_started_at) ? new Date(match.round_started_at).getTime() : nowMs;
   const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
-  const isCountdownActive = elapsedSec < 4.5;
-  const gameElapsedSec = isCountdownActive ? 0 : elapsedSec - 4.5;
-  const currentQIndex = Math.min(4, Math.floor(gameElapsedSec / 15));
-  const questionTimeLeftSec = isCountdownActive ? 15 : Math.max(0, Math.ceil(15 - (gameElapsedSec % 15)));
+  const isCountdownActive = isRoundActive && elapsedSec < 4.5;
+  const gameElapsedSec = isCountdownActive ? 0 : Math.max(0, elapsedSec - 4.5);
+  const currentQIndex = Math.min(4, Math.floor(gameElapsedSec / 10));
+  const questionTimeLeftSec = isCountdownActive ? 10 : (gameElapsedSec >= 50 ? 0 : Math.max(0, Math.ceil(10 - (gameElapsedSec % 10))));
+  const isRoundQuestionsComplete = isRoundActive && gameElapsedSec >= 50;
   const currentLiveQuestion = activeRoundQuestions[currentQIndex] || null;
+
+  // Guarded Auto-Transition to Round Results / Final Results on 10s Timer Expiry of Final Question
+  const autoTransitionKeyRef = useRef(null);
+  useEffect(() => {
+    if (!match?.id || !isRoundActive) return;
+
+    if (gameElapsedSec >= 50) {
+      const key = `${match.id}_${match.status}`;
+      if (autoTransitionKeyRef.current !== key) {
+        autoTransitionKeyRef.current = key;
+        if (match.status === 'round1') {
+          updateMatchStatus('round1_results', 1);
+        } else if (match.status === 'round2') {
+          updateMatchStatus('round2_results', 2);
+        } else if (match.status === 'round3') {
+          updateMatchStatus('final_results', 3);
+        }
+      }
+    }
+  }, [match?.id, match?.status, gameElapsedSec, isRoundActive]);
+
+  // Play Urgency Ticks on Host during the last 5 seconds of every question
+  const lastHostUrgencyKeyRef = useRef(null);
+  useEffect(() => {
+    if (!isRoundActive || isCountdownActive || isRoundQuestionsComplete) return;
+    if (questionTimeLeftSec <= 5 && questionTimeLeftSec > 0) {
+      const key = `${match?.current_round}_${currentQIndex}_${questionTimeLeftSec}`;
+      if (lastHostUrgencyKeyRef.current !== key) {
+        lastHostUrgencyKeyRef.current = key;
+        audioManager.playUrgencyTick(questionTimeLeftSec);
+      }
+    }
+  }, [isRoundActive, isCountdownActive, isRoundQuestionsComplete, match?.current_round, currentQIndex, questionTimeLeftSec]);
 
   return (
     <ArenaBackground>
@@ -1150,22 +1184,22 @@ export default function MatchConsoleView() {
                   </div>
 
                   {/* Question Content */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0.4rem 0' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#FDCB6E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0.5rem 0' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#FDCB6E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                       ROUND {match.current_round} — {match.current_round === 1 ? 'REAL OR FAKE?' : match.current_round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
                     </span>
 
                     <h3 style={{
                       color: '#FFFFFF',
-                      fontSize: 'clamp(1.05rem, 2vw, 1.3rem)',
+                      fontSize: 'clamp(1.15rem, 2.2vw, 1.45rem)',
                       fontWeight: 800,
-                      lineHeight: '1.3',
-                      marginBottom: '0.65rem',
+                      lineHeight: '1.35',
+                      marginBottom: '1rem',
                       maxWidth: '92%'
                     }}>
                       {currentLiveQuestion ? (
-                        currentLiveQuestion.round === 3 && currentLiveQuestion.prompt_text?.length < 10
-                          ? 'WHICH AI CONCEPT DO THESE EMOJIS REPRESENT?'
+                        currentLiveQuestion.round === 3
+                          ? (currentLiveQuestion.prompt_text?.length < 10 ? 'WHICH AI CONCEPT DO THESE EMOJIS REPRESENT?' : currentLiveQuestion.prompt_text)
                           : currentLiveQuestion.prompt_text
                       ) : 'Loading active question...'}
                     </h3>

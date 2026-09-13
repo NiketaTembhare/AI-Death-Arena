@@ -299,7 +299,7 @@ class AudioManager {
 
       for (let i = 0; i < totalClaps; i++) {
         const clapTime = now + (Math.random() * durationSec);
-        
+
         const whiteNoise = this.ctx.createBufferSource();
         whiteNoise.buffer = noiseBuffer;
 
@@ -414,7 +414,7 @@ class AudioManager {
           kickOsc.start();
           kickOsc.stop(this.ctx.currentTime + 0.3);
 
-      // Cymbal shimmer hit
+          // Cymbal shimmer hit
           this.playBeep(1200, 'triangle', 0.35, 0.4);
         } catch (e) {
           // ignore

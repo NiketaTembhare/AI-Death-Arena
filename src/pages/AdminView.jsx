@@ -122,14 +122,17 @@ export default function AdminView() {
       await supabase.from('match_players').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('matches').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-      // 2. Guaranteed status update: Mark matches as archived_deleted & players as left
+      // 2. Guaranteed status update: Mark matches as archived & players as left
       // This guarantees 100% wipeout from Hall of Fame leaderboard regardless of Supabase RLS delete policies
-      await supabase.from('matches').update({ status: 'archived_deleted' }).neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('matches').update({ status: 'archived' }).neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('match_players').update({ has_left: true }).neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('match_answers').update({ points_earned: 0, is_correct: false }).neq('id', '00000000-0000-0000-0000-000000000000');
 
       localStorage.removeItem('arena_completed_date');
       localStorage.removeItem('arena_device_token');
+      localStorage.removeItem('arena_player_id');
+      localStorage.removeItem('arena_match_id');
+      localStorage.removeItem('arena_access_code');
 
       setShowResetModal(false);
       setResetConfirmInput('');
