@@ -237,6 +237,13 @@ class AudioManager {
     this.speakCountdown(number);
   }
 
+  playUrgencyTick(sec) {
+    if (this.isMuted) return;
+    const freqs = { 5: 523.25, 4: 659.25, 3: 783.99, 2: 880, 1: 1046.5 };
+    const freq = freqs[sec] || 440;
+    this.playBeep(freq, 'sine', 0.12, 0.35);
+  }
+
   playCorrect() {
     if (this.isMuted) return;
     this.initContext();

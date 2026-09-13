@@ -845,11 +845,45 @@ export default function MatchConsoleView() {
   const isRoundActive = match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3';
   const startedAtMs = (isRoundActive && match?.round_started_at) ? new Date(match.round_started_at).getTime() : nowMs;
   const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
-  const isCountdownActive = elapsedSec < 4.5;
-  const gameElapsedSec = isCountdownActive ? 0 : elapsedSec - 4.5;
-  const currentQIndex = Math.min(4, Math.floor(gameElapsedSec / 15));
-  const questionTimeLeftSec = isCountdownActive ? 15 : Math.max(0, Math.ceil(15 - (gameElapsedSec % 15)));
+  const isCountdownActive = isRoundActive && elapsedSec < 4.5;
+  const gameElapsedSec = isCountdownActive ? 0 : Math.max(0, elapsedSec - 4.5);
+  const currentQIndex = Math.min(4, Math.floor(gameElapsedSec / 10));
+  const questionTimeLeftSec = isCountdownActive ? 10 : (gameElapsedSec >= 50 ? 0 : Math.max(0, Math.ceil(10 - (gameElapsedSec % 10))));
+  const isRoundQuestionsComplete = isRoundActive && gameElapsedSec >= 50;
   const currentLiveQuestion = activeRoundQuestions[currentQIndex] || null;
+
+  // Guarded Auto-Transition to Round Results / Final Results on 10s Timer Expiry of Final Question
+  const autoTransitionKeyRef = useRef(null);
+  useEffect(() => {
+    if (!match?.id || !isRoundActive) return;
+
+    if (gameElapsedSec >= 50) {
+      const key = `${match.id}_${match.status}`;
+      if (autoTransitionKeyRef.current !== key) {
+        autoTransitionKeyRef.current = key;
+        if (match.status === 'round1') {
+          updateMatchStatus('round1_results', 1);
+        } else if (match.status === 'round2') {
+          updateMatchStatus('round2_results', 2);
+        } else if (match.status === 'round3') {
+          updateMatchStatus('final_results', 3);
+        }
+      }
+    }
+  }, [match?.id, match?.status, gameElapsedSec, isRoundActive]);
+
+  // Play Urgency Ticks on Host during the last 5 seconds of every question
+  const lastHostUrgencyKeyRef = useRef(null);
+  useEffect(() => {
+    if (!isRoundActive || isCountdownActive || isRoundQuestionsComplete) return;
+    if (questionTimeLeftSec <= 5 && questionTimeLeftSec > 0) {
+      const key = `${match?.current_round}_${currentQIndex}_${questionTimeLeftSec}`;
+      if (lastHostUrgencyKeyRef.current !== key) {
+        lastHostUrgencyKeyRef.current = key;
+        audioManager.playUrgencyTick(questionTimeLeftSec);
+      }
+    }
+  }, [isRoundActive, isCountdownActive, isRoundQuestionsComplete, match?.current_round, currentQIndex, questionTimeLeftSec]);
 
   return (
     <ArenaBackground>
