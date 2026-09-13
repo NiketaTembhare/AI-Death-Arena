@@ -699,9 +699,25 @@ export default function MatchConsoleView() {
 
   if (loading) {
     return (
-      <div style={darkPageStyle}>
-        <h2>Loading Match Console...</h2>
-      </div>
+      <ArenaBackground>
+        <div style={darkPageStyle}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+            <div className="card-console" style={{ maxWidth: '420px', width: '100%', textAlign: 'center', padding: '3rem 2rem' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                border: '4px solid #6C5CE7',
+                borderTopColor: '#FDCB6E',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto 1.5rem auto'
+              }} />
+              <h2 style={{ fontSize: '1.6rem', color: '#FFFFFF', marginBottom: '0.5rem' }}>Loading Match Console...</h2>
+              <p style={{ color: '#A29BFE', fontSize: '0.9rem', fontWeight: 600 }}>Connecting to AI Death Arena server</p>
+            </div>
+          </div>
+        </div>
+      </ArenaBackground>
     );
   }
 
