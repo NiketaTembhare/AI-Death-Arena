@@ -750,9 +750,9 @@ export default function PlayerView() {
           {currentQ.round === 2 && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.35rem 0 0.5rem 0' }}>
               <div style={{
-                width: '135px',
-                height: '135px',
-                padding: '0.6rem',
+                width: '165px',
+                height: '165px',
+                padding: '0.5rem',
                 background: '#FFFFFF',
                 borderRadius: '20px',
                 boxShadow: '0 6px 20px rgba(108, 92, 231, 0.14), 0 2px 8px rgba(0,0,0,0.05)',
