@@ -6,7 +6,8 @@ import { supabase } from '../lib/supabase';
 import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
 import { syncServerClock, getServerTimeMs, getClockOffsetMs } from '../lib/serverClock';
-import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft } from 'lucide-react';
+import { getSeededShuffledOptions, getSeededIsRealOnLeft } from '../lib/questionUtils';
+import { Volume2, VolumeX, Play, Award, RotateCcw, Crown, Users, ArrowRight, X, ArrowLeft, Clock } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
 import ArenaIntroOverlay from '../components/ArenaIntroOverlay';
@@ -18,6 +19,8 @@ export default function MatchConsoleView() {
   const [players, setPlayers] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [answeredCount, setAnsweredCount] = useState(0);
+  const [activeRoundQuestions, setActiveRoundQuestions] = useState([]);
+  const [nowMs, setNowMs] = useState(getServerTimeMs());
   const [isMuted, setIsMuted] = useState(audioManager.isMuted);
   const [countdownNum, setCountdownNum] = useState(null);
   const [isStartingRound, setIsStartingRound] = useState(false);
@@ -215,6 +218,55 @@ export default function MatchConsoleView() {
     setLeaderboard(aggregated);
     setAnsweredCount(donePlayersCount);
   };
+
+  // 3. Fetch active round questions for Host Display
+  const fetchActiveRoundQuestions = async (matchId, currentRound) => {
+    if (!matchId || !currentRound || Number(currentRound) <= 0) {
+      setActiveRoundQuestions([]);
+      return;
+    }
+    const { data } = await supabase
+      .from('match_round_questions')
+      .select('question_id, position, questions(*)')
+      .eq('match_id', matchId)
+      .eq('round', Number(currentRound))
+      .order('position', { ascending: true });
+
+    if (data && data.length > 0) {
+      const uniqueMap = new Map();
+      data.forEach((item) => {
+        if (item.questions && !uniqueMap.has(item.question_id)) {
+          uniqueMap.set(item.question_id, item.questions);
+        }
+      });
+      setActiveRoundQuestions(Array.from(uniqueMap.values()));
+    } else {
+      const { data: pool } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('round', Number(currentRound))
+        .eq('is_active', true)
+        .order('id', { ascending: true })
+        .limit(5);
+
+      if (pool) setActiveRoundQuestions(pool);
+    }
+  };
+
+  useEffect(() => {
+    if (match?.id && match?.current_round && Number(match.current_round) > 0) {
+      fetchActiveRoundQuestions(match.id, match.current_round);
+    }
+  }, [match?.id, match?.current_round, match?.status]);
+
+  useEffect(() => {
+    if (match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3') {
+      const interval = setInterval(() => {
+        setNowMs(getServerTimeMs());
+      }, 250);
+      return () => clearInterval(interval);
+    }
+  }, [match?.status]);
 
   const DARK_BRIGHT_COLORS = ['#F59E0B', '#7C3AED', '#EC4899', '#06B6D4', '#EF4444', '#10B981', '#F97316'];
   const CELEBRATION_EMOJIS = ['👏🏻', '👏🏼', '✨', '💸', '🥳', '🎉', '🎊', '🪩'];
@@ -653,7 +705,151 @@ export default function MatchConsoleView() {
     );
   }
 
+  const renderLeaderboardTable = () => {
+    if (leaderboard.length === 0) {
+      return <p style={{ color: '#A29BFE', textAlign: 'center', padding: '2rem' }}>Waiting for player scores...</p>;
+    }
+    return (
+      <div style={{ width: '100%', overflowX: 'auto' }}>
+        <div style={{ minWidth: '580px' }}>
+          {/* Table Column Headers */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '60px 2fr 1fr 1fr 1fr 1.2fr 35px',
+            gap: '0.5rem',
+            padding: '0.5rem 0.75rem',
+            marginBottom: '0.5rem',
+            color: '#A29BFE',
+            fontSize: '0.8rem',
+            fontWeight: 800,
+            letterSpacing: '1px',
+            textTransform: 'uppercase',
+            borderBottom: '1px solid #2D2856'
+          }}>
+            <div>RANK</div>
+            <div>PLAYER</div>
+            <div style={{ textAlign: 'center' }}>ROUND 1</div>
+            <div style={{ textAlign: 'center' }}>ROUND 2</div>
+            <div style={{ textAlign: 'center' }}>ROUND 3</div>
+            <div style={{ textAlign: 'right' }}>TOTAL SCORE</div>
+            <div></div>
+          </div>
+
+          {/* Animated Rows Container */}
+          <div style={{
+            position: 'relative',
+            height: `${leaderboard.length * 68}px`,
+            transition: 'height 300ms ease'
+          }}>
+            {leaderboard.map((player, idx) => {
+              const avatar = getPlayerAvatar(player.display_name);
+              const isFirst = idx === 0;
+
+              return (
+                <div
+                  key={player.player_id}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '56px',
+                    transform: `translateY(${idx * 68}px)`,
+                    transition: 'transform 450ms cubic-bezier(0.2, 0, 0, 1), background-color 300ms ease, border-color 300ms ease',
+                    background: isFirst ? 'linear-gradient(90deg, #1E1A3C, #322A63)' : '#161334',
+                    border: isFirst ? '2px solid #FDCB6E' : '1px solid #2D2856',
+                    borderRadius: '16px',
+                    padding: '0 0.85rem',
+                    display: 'grid',
+                    gridTemplateColumns: '60px 2fr 1fr 1fr 1fr 1.2fr 35px',
+                    gap: '0.5rem',
+                    alignItems: 'center',
+                    boxShadow: isFirst ? '0 4px 20px rgba(253, 203, 110, 0.2)' : 'none'
+                  }}
+                >
+                  {/* RANK */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    {isFirst && <Crown size={16} color="#FDCB6E" />}
+                    <span style={{
+                      fontSize: '1.15rem',
+                      fontWeight: 900,
+                      color: isFirst ? '#FDCB6E' : idx === 1 ? '#DFE6E9' : idx === 2 ? '#E17055' : '#A29BFE'
+                    }}>
+                      #{idx + 1}
+                    </span>
+                  </div>
+
+                  {/* PLAYER */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', overflow: 'hidden' }}>
+                    <div className="avatar-badge" style={{ background: avatar.bgColor, width: '32px', height: '32px', fontSize: '1.1rem', flexShrink: 0 }}>
+                      {avatar.emoji}
+                    </div>
+                    <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {player.display_name}
+                    </span>
+                  </div>
+
+                  {/* ROUND 1 */}
+                  <div style={{ textAlign: 'center', fontWeight: 700, color: player.r1_score > 0 ? '#00B894' : '#636E72', fontSize: '0.95rem' }}>
+                    {player.r1_score > 0 ? `+${player.r1_score}` : '—'}
+                  </div>
+
+                  {/* ROUND 2 */}
+                  <div style={{ textAlign: 'center', fontWeight: 700, color: player.r2_score > 0 ? '#00B894' : '#636E72', fontSize: '0.95rem' }}>
+                    {player.r2_score > 0 ? `+${player.r2_score}` : '—'}
+                  </div>
+
+                  {/* ROUND 3 */}
+                  <div style={{ textAlign: 'center', fontWeight: 700, color: player.r3_score > 0 ? '#00B894' : '#636E72', fontSize: '0.95rem' }}>
+                    {player.r3_score > 0 ? `+${player.r3_score}` : '—'}
+                  </div>
+
+                  {/* TOTAL */}
+                  <div style={{ textAlign: 'right', fontSize: '1.2rem', fontWeight: 900, color: '#FDCB6E' }}>
+                    {player.total_score} <span style={{ fontSize: '0.8rem', color: '#A29BFE' }}>pts</span>
+                  </div>
+
+                  {/* REMOVE ACTION */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => handleRemovePlayer(player.player_id, player.display_name)}
+                      title="Remove player from match"
+                      style={{
+                        background: 'rgba(255, 118, 117, 0.15)',
+                        border: '1px solid #FF7675',
+                        color: '#FF7675',
+                        borderRadius: '50%',
+                        width: '24px',
+                        height: '24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        flexShrink: 0
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const joinUrl = match ? `${window.location.origin}/play?room=${match.room_code}` : '';
+
+  const isRoundActive = match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3';
+  const startedAtMs = (isRoundActive && match?.round_started_at) ? new Date(match.round_started_at).getTime() : nowMs;
+  const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
+  const isCountdownActive = elapsedSec < 4.5;
+  const gameElapsedSec = isCountdownActive ? 0 : elapsedSec - 4.5;
+  const currentQIndex = Math.min(4, Math.floor(gameElapsedSec / 15));
+  const questionTimeLeftSec = isCountdownActive ? 15 : Math.max(0, Math.ceil(15 - (gameElapsedSec % 15)));
+  const currentLiveQuestion = activeRoundQuestions[currentQIndex] || null;
 
   return (
     <ArenaBackground>
@@ -836,33 +1032,44 @@ export default function MatchConsoleView() {
 
         {/* STATE C: ROUND IN PROGRESS / BETWEEN ROUNDS */}
         {match && match.status !== 'lobby' && match.status !== 'final_results' && match.status !== 'archived' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {/* Host Controls & Round Banner */}
-            <div className="card-console" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* FULL-WIDTH TOP SECTION: Current Match Status */}
+            <div
+              className="card-console"
+              style={{
+                padding: '1.1rem 1.5rem',
+                display: 'flex',
+                justify: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '1rem'
+              }}
+            >
+              {/* Header Title & Current Round */}
               <div>
-                <span style={{ color: '#FDCB6E', fontWeight: 800, fontSize: '1rem', letterSpacing: '1px' }}>
+                <span style={{ color: '#FDCB6E', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '1px' }}>
                   CURRENT MATCH STATUS
                 </span>
-                <h2 style={{ fontSize: '2rem', textTransform: 'uppercase', color: '#FFFFFF' }}>
+                <h2 style={{ fontSize: '1.85rem', textTransform: 'uppercase', color: '#FFFFFF', lineHeight: '1.1' }}>
                   {match.status.replace('_', ' ')}
                 </h2>
               </div>
 
               {/* Answered Progress Indicator for Host */}
               {(match.status === 'round1' || match.status === 'round2' || match.status === 'round3') && (
-                <div style={{ background: '#161334', border: '1px solid #00B894', padding: '0.5rem 1.25rem', borderRadius: '16px', textAlign: 'center' }}>
-                  <span style={{ color: '#A29BFE', fontSize: '0.8rem', fontWeight: 700, display: 'block' }}>ANSWERED PROGRESS</span>
-                  <strong style={{ fontSize: '1.25rem', color: '#00B894' }}>
+                <div style={{ background: '#161334', border: '1px solid #00B894', padding: '0.45rem 1.2rem', borderRadius: '14px', textAlign: 'center' }}>
+                  <span style={{ color: '#A29BFE', fontSize: '0.75rem', fontWeight: 700, display: 'block' }}>ANSWERED PROGRESS</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#00B894' }}>
                     {answeredCount} / {players.length} Players Done
                   </strong>
                 </div>
               )}
 
               {/* Sequential Round Progression Controls */}
-              <div style={{ display: 'flex', gap: '1rem' }}>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
                 {match.status === 'round1' && (
-                  <button onClick={() => updateMatchStatus('round1_results', 1)} className="btn btn-orange" style={{ fontSize: '1.1rem' }}>
-                    SHOW ROUND 1 RESULTS <ArrowRight size={20} />
+                  <button onClick={() => updateMatchStatus('round1_results', 1)} className="btn btn-orange" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}>
+                    SHOW ROUND 1 RESULTS <ArrowRight size={18} />
                   </button>
                 )}
 
@@ -871,15 +1078,15 @@ export default function MatchConsoleView() {
                     disabled={isStartingRound || countdownNum !== null}
                     onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round2', 2)}
                     className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
-                    style={{ fontSize: '1.1rem' }}
+                    style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}
                   >
-                    {isStartingRound || countdownNum !== null ? 'STARTING ROUND 2...' : 'START ROUND 2'} <Play size={20} />
+                    {isStartingRound || countdownNum !== null ? 'STARTING ROUND 2...' : 'START ROUND 2'} <Play size={18} />
                   </button>
                 )}
 
                 {match.status === 'round2' && (
-                  <button onClick={() => updateMatchStatus('round2_results', 2)} className="btn btn-orange" style={{ fontSize: '1.1rem' }}>
-                    SHOW ROUND 2 RESULTS <ArrowRight size={20} />
+                  <button onClick={() => updateMatchStatus('round2_results', 2)} className="btn btn-orange" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}>
+                    SHOW ROUND 2 RESULTS <ArrowRight size={18} />
                   </button>
                 )}
 
@@ -888,155 +1095,220 @@ export default function MatchConsoleView() {
                     disabled={isStartingRound || countdownNum !== null}
                     onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round3', 3)}
                     className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
-                    style={{ fontSize: '1.1rem' }}
+                    style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}
                   >
-                    {isStartingRound || countdownNum !== null ? 'STARTING ROUND 3...' : 'START ROUND 3'} <Play size={20} />
+                    {isStartingRound || countdownNum !== null ? 'STARTING ROUND 3...' : 'START ROUND 3'} <Play size={18} />
                   </button>
                 )}
 
                 {match.status === 'round3' && (
-                  <button onClick={() => updateMatchStatus('final_results', 3)} className="btn btn-yellow" style={{ fontSize: '1.1rem', color: '#2D3436' }}>
-                    SHOW FINAL RESULTS <Award size={20} />
+                  <button onClick={() => updateMatchStatus('final_results', 3)} className="btn btn-yellow" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem', color: '#2D3436' }}>
+                    SHOW FINAL RESULTS <Award size={18} />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Live Re-sorting Leaderboard */}
-            <div className="card-console">
-              <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#A29BFE' }}>LIVE ARENA STANDINGS</h3>
-
-              {leaderboard.length === 0 ? (
-                <p style={{ color: '#A29BFE', textAlign: 'center', padding: '2rem' }}>Waiting for player scores...</p>
-              ) : (
-                <div style={{ width: '100%', overflowX: 'auto' }}>
-                  <div style={{ minWidth: '680px' }}>
-                    {/* Table Column Headers */}
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '70px 2fr 1fr 1fr 1fr 1.2fr 40px',
-                      gap: '0.75rem',
-                      padding: '0.5rem 1.25rem',
-                      marginBottom: '0.5rem',
+            {/* MAIN ARENA CONTENT: 2 columns when round active (Left = Question Area, Right = Leaderboard) */}
+            {isRoundActive ? (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+                gap: '1.25rem',
+                alignItems: 'start'
+              }}>
+                {/* LEFT SIDE — LIVE QUESTION AREA */}
+                <div className="card-console" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minHeight: '340px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{
+                      background: 'rgba(108, 92, 231, 0.25)',
+                      border: '1px solid #6C5CE7',
                       color: '#A29BFE',
-                      fontSize: '0.8rem',
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '999px',
+                      fontSize: '0.85rem',
                       fontWeight: 800,
-                      letterSpacing: '1px',
-                      textTransform: 'uppercase',
-                      borderBottom: '1px solid #2D2856'
+                      letterSpacing: '0.5px'
                     }}>
-                      <div>RANK</div>
-                      <div>PLAYER</div>
-                      <div style={{ textAlign: 'center' }}>ROUND 1</div>
-                      <div style={{ textAlign: 'center' }}>ROUND 2</div>
-                      <div style={{ textAlign: 'center' }}>ROUND 3</div>
-                      <div style={{ textAlign: 'right' }}>TOTAL SCORE</div>
-                      <div></div>
-                    </div>
+                      QUESTION {currentQIndex + 1} / {activeRoundQuestions.length || 5}
+                    </span>
 
-                    {/* Animated Rows Container */}
-                    <div style={{
-                      position: 'relative',
-                      height: `${leaderboard.length * 72}px`,
-                      transition: 'height 300ms ease'
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      color: questionTimeLeftSec <= 5 ? '#FF7675' : '#00B894',
+                      fontSize: '1.1rem',
+                      fontWeight: 800,
+                      background: '#161334',
+                      border: `1px solid ${questionTimeLeftSec <= 5 ? '#FF7675' : '#00B894'}`,
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '12px'
                     }}>
-                      {leaderboard.map((player, idx) => {
-                        const avatar = getPlayerAvatar(player.display_name);
-                        const isFirst = idx === 0;
+                      <Clock size={18} /> {questionTimeLeftSec}s
+                    </span>
+                  </div>
+
+                  {/* Question Content */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0.4rem 0' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#FDCB6E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                      ROUND {match.current_round} — {match.current_round === 1 ? 'REAL OR FAKE?' : match.current_round === 2 ? 'DECODE THE BRAND' : 'EMOJI DECODE'}
+                    </span>
+
+                    <h3 style={{
+                      color: '#FFFFFF',
+                      fontSize: 'clamp(1.05rem, 2vw, 1.3rem)',
+                      fontWeight: 800,
+                      lineHeight: '1.3',
+                      marginBottom: '0.65rem',
+                      maxWidth: '92%'
+                    }}>
+                      {currentLiveQuestion ? (
+                        currentLiveQuestion.round === 3 && currentLiveQuestion.prompt_text?.length < 10
+                          ? 'WHICH AI CONCEPT DO THESE EMOJIS REPRESENT?'
+                          : currentLiveQuestion.prompt_text
+                      ) : 'Loading active question...'}
+                    </h3>
+
+                    {/* ROUND 2: Brand Logo Display (Fixed Visibility on Host) */}
+                    {currentLiveQuestion && currentLiveQuestion.round === 2 && currentLiveQuestion.logo_url && (
+                      <div style={{
+                        background: '#FFFFFF',
+                        borderRadius: '20px',
+                        padding: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 'clamp(130px, 15vw, 170px)',
+                        height: 'clamp(130px, 15vw, 170px)',
+                        margin: '0.4rem 0 0.6rem 0',
+                        boxShadow: '0 10px 28px rgba(108, 92, 231, 0.25), 0 4px 12px rgba(0,0,0,0.12)',
+                        border: '3px solid #EEF2FF'
+                      }}>
+                        <img
+                          src={currentLiveQuestion.logo_url}
+                          alt="Brand Logo"
+                          style={{ width: '80%', height: '80%', maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            if (e.target.parentNode) e.target.parentNode.innerHTML = '<span style="font-size:3rem;">🤖</span>';
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* ROUND 3: Large Emojis Display */}
+                    {currentLiveQuestion && currentLiveQuestion.round === 3 && (
+                      <div style={{ margin: '0.5rem 0 0.75rem 0' }}>
+                        <span style={{
+                          fontSize: 'clamp(3.5rem, 7vw, 4.8rem)',
+                          filter: 'drop-shadow(0 6px 18px rgba(0,0,0,0.4))',
+                          lineHeight: 1,
+                          letterSpacing: '0.25em'
+                        }}>
+                          {currentLiveQuestion.prompt_text?.match(/\p{Extended_Pictographic}/gu)?.join(' ') || currentLiveQuestion.prompt_text}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* ROUND 1: Answer Options Cards Displayed on Host (Display-Only for Audience) */}
+                    {currentLiveQuestion && currentLiveQuestion.round === 1 && (() => {
+                      const seedStr = `${match.id}_${currentLiveQuestion.id}`;
+                      
+                      // Check if question has real_image_url & ai_image_url (Image Comparison format)
+                      if (currentLiveQuestion.real_image_url || currentLiveQuestion.ai_image_url) {
+                        const isRealOnLeft = getSeededIsRealOnLeft(seedStr);
+                        const imgA = isRealOnLeft ? currentLiveQuestion.real_image_url : currentLiveQuestion.ai_image_url;
+                        const imgB = isRealOnLeft ? currentLiveQuestion.ai_image_url : currentLiveQuestion.real_image_url;
 
                         return (
-                          <div
-                            key={player.player_id}
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              height: '60px',
-                              transform: `translateY(${idx * 72}px)`,
-                              transition: 'transform 450ms cubic-bezier(0.2, 0, 0, 1), background-color 300ms ease, border-color 300ms ease',
-                              background: isFirst ? 'linear-gradient(90deg, #1E1A3C, #322A63)' : '#161334',
-                              border: isFirst ? '2px solid #FDCB6E' : '1px solid #2D2856',
-                              borderRadius: '16px',
-                              padding: '0 1.25rem',
-                              display: 'grid',
-                              gridTemplateColumns: '70px 2fr 1fr 1fr 1fr 1.2fr 40px',
-                              gap: '0.75rem',
-                              alignItems: 'center',
-                              boxShadow: isFirst ? '0 4px 20px rgba(253, 203, 110, 0.2)' : 'none'
-                            }}
-                          >
-                            {/* RANK */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                              {isFirst && <Crown size={18} color="#FDCB6E" />}
-                              <span style={{
-                                fontSize: '1.25rem',
-                                fontWeight: 900,
-                                color: isFirst ? '#FDCB6E' : idx === 1 ? '#DFE6E9' : idx === 2 ? '#E17055' : '#A29BFE'
-                              }}>
-                                #{idx + 1}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', width: '100%', maxWidth: '400px', margin: '0.35rem 0' }}>
+                            <div style={{
+                              background: '#161334',
+                              border: '2px solid #2D2856',
+                              borderRadius: '14px',
+                              overflow: 'hidden',
+                              height: '110px',
+                              position: 'relative'
+                            }}>
+                              <img src={imgA} alt="Option A" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.src = 'https://via.placeholder.com/200x120?text=Image+A'; }} />
+                              <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.75)', color: '#FFF', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 800 }}>
+                                IMAGE A
                               </span>
                             </div>
-
-                            {/* PLAYER */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
-                              <div className="avatar-badge" style={{ background: avatar.bgColor, width: '36px', height: '36px', fontSize: '1.2rem', flexShrink: 0 }}>
-                                {avatar.emoji}
-                              </div>
-                              <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {player.display_name}
+                            <div style={{
+                              background: '#161334',
+                              border: '2px solid #2D2856',
+                              borderRadius: '14px',
+                              overflow: 'hidden',
+                              height: '110px',
+                              position: 'relative'
+                            }}>
+                              <img src={imgB} alt="Option B" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.src = 'https://via.placeholder.com/200x120?text=Image+B'; }} />
+                              <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.75)', color: '#FFF', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 800 }}>
+                                IMAGE B
                               </span>
-                            </div>
-
-                            {/* ROUND 1 */}
-                            <div style={{ textAlign: 'center', fontWeight: 700, color: player.r1_score > 0 ? '#00B894' : '#636E72', fontSize: '1rem' }}>
-                              {player.r1_score > 0 ? `+${player.r1_score}` : '—'}
-                            </div>
-
-                            {/* ROUND 2 */}
-                            <div style={{ textAlign: 'center', fontWeight: 700, color: player.r2_score > 0 ? '#00B894' : '#636E72', fontSize: '1rem' }}>
-                              {player.r2_score > 0 ? `+${player.r2_score}` : '—'}
-                            </div>
-
-                            {/* ROUND 3 */}
-                            <div style={{ textAlign: 'center', fontWeight: 700, color: player.r3_score > 0 ? '#00B894' : '#636E72', fontSize: '1rem' }}>
-                              {player.r3_score > 0 ? `+${player.r3_score}` : '—'}
-                            </div>
-
-                            {/* TOTAL */}
-                            <div style={{ textAlign: 'right', fontSize: '1.3rem', fontWeight: 900, color: '#FDCB6E' }}>
-                              {player.total_score} <span style={{ fontSize: '0.85rem', color: '#A29BFE' }}>pts</span>
-                            </div>
-
-                            {/* REMOVE ACTION */}
-                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                              <button
-                                onClick={() => handleRemovePlayer(player.player_id, player.display_name)}
-                                title="Remove player from match"
-                                style={{
-                                  background: 'rgba(255, 118, 117, 0.15)',
-                                  border: '1px solid #FF7675',
-                                  color: '#FF7675',
-                                  borderRadius: '50%',
-                                  width: '26px',
-                                  height: '26px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                <X size={14} />
-                              </button>
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
+                      }
+
+                      // Otherwise, check if question has options array (Text Choice format)
+                      const rawOptions = currentLiveQuestion.options ? (typeof currentLiveQuestion.options === 'string' ? JSON.parse(currentLiveQuestion.options) : currentLiveQuestion.options) : [];
+                      if (rawOptions && rawOptions.length > 0) {
+                        const shuffledOptions = getSeededShuffledOptions(rawOptions, seedStr);
+                        const colors = ['#FF7675', '#0984E3', '#FDCB6E', '#00B894'];
+                        const letters = ['A', 'B', 'C', 'D'];
+
+                        return (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', width: '100%', maxWidth: '420px', margin: '0.35rem 0' }}>
+                            {shuffledOptions.map((optText, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  background: '#161334',
+                                  border: `2px solid ${colors[idx % 4]}`,
+                                  borderRadius: '12px',
+                                  padding: '0.45rem 0.6rem',
+                                  textAlign: 'center',
+                                  color: '#FFFFFF',
+                                  fontSize: '0.85rem',
+                                  fontWeight: 800,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.4rem'
+                                }}
+                              >
+                                <span style={{ background: colors[idx % 4], color: idx === 2 ? '#2D3436' : '#FFF', padding: '0.15rem 0.45rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 900 }}>
+                                  {letters[idx] || idx + 1}
+                                </span>
+                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                                  {optText}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
+
+                      return null;
+                    })()}
                   </div>
                 </div>
-              )}
-            </div>
+
+                {/* RIGHT SIDE — LIVE ARENA STANDINGS */}
+                <div className="card-console" style={{ overflow: 'hidden' }}>
+                  <h3 style={{ fontSize: '1.4rem', marginBottom: '1rem', color: '#A29BFE' }}>LIVE ARENA STANDINGS</h3>
+                  {renderLeaderboardTable()}
+                </div>
+              </div>
+            ) : (
+              /* Between Rounds (Results Stage): Full-width Leaderboard */
+              <div className="card-console">
+                <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#A29BFE' }}>LIVE ARENA STANDINGS</h3>
+                {renderLeaderboardTable()}
+              </div>
+            )}
           </div>
         )}
 
