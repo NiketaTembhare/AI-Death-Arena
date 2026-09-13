@@ -1222,30 +1222,72 @@ export default function MatchConsoleView() {
                         const imgB = isRealOnLeft ? currentLiveQuestion.ai_image_url : currentLiveQuestion.real_image_url;
 
                         return (
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', width: '100%', maxWidth: '400px', margin: '0.35rem 0' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', width: '100%', maxWidth: '560px', margin: '0.5rem 0' }}>
                             <div style={{
                               background: '#161334',
                               border: '2px solid #2D2856',
-                              borderRadius: '14px',
+                              borderRadius: '16px',
                               overflow: 'hidden',
-                              height: '110px',
-                              position: 'relative'
+                              height: 'clamp(160px, 22vw, 240px)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              position: 'relative',
+                              padding: '0.4rem'
                             }}>
-                              <img src={imgA} alt="Option A" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.src = 'https://via.placeholder.com/200x120?text=Image+A'; }} />
-                              <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.75)', color: '#FFF', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 800 }}>
+                              <img
+                                src={imgA}
+                                alt="Option A"
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                onError={(e) => { e.target.src = 'https://via.placeholder.com/300x200?text=Image+A'; }}
+                              />
+                              <span style={{
+                                position: 'absolute',
+                                bottom: '8px',
+                                left: '8px',
+                                background: 'rgba(0, 0, 0, 0.75)',
+                                color: '#FFF',
+                                padding: '0.2rem 0.6rem',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: 800,
+                                backdropFilter: 'blur(4px)',
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                              }}>
                                 IMAGE A
                               </span>
                             </div>
                             <div style={{
                               background: '#161334',
                               border: '2px solid #2D2856',
-                              borderRadius: '14px',
+                              borderRadius: '16px',
                               overflow: 'hidden',
-                              height: '110px',
-                              position: 'relative'
+                              height: 'clamp(160px, 22vw, 240px)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              position: 'relative',
+                              padding: '0.4rem'
                             }}>
-                              <img src={imgB} alt="Option B" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.src = 'https://via.placeholder.com/200x120?text=Image+B'; }} />
-                              <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.75)', color: '#FFF', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 800 }}>
+                              <img
+                                src={imgB}
+                                alt="Option B"
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                onError={(e) => { e.target.src = 'https://via.placeholder.com/300x200?text=Image+B'; }}
+                              />
+                              <span style={{
+                                position: 'absolute',
+                                bottom: '8px',
+                                left: '8px',
+                                background: 'rgba(0, 0, 0, 0.75)',
+                                color: '#FFF',
+                                padding: '0.2rem 0.6rem',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: 800,
+                                backdropFilter: 'blur(4px)',
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                              }}>
                                 IMAGE B
                               </span>
                             </div>
