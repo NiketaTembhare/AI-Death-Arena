@@ -9,6 +9,21 @@ class AudioManager {
     this.voices = [];
     this.selectedVoice = null;
     this.initSpeech();
+
+    // Bind playback methods for HMR safety
+    this.playBeep = this.playBeep.bind(this);
+    this.playCountdownBeep = this.playCountdownBeep.bind(this);
+    this.playCorrect = this.playCorrect.bind(this);
+    this.playWrong = this.playWrong.bind(this);
+    this.playRoundStart = this.playRoundStart.bind(this);
+    this.playRoundEnd = this.playRoundEnd.bind(this);
+    this.playFinalFanfare = this.playFinalFanfare.bind(this);
+    this.playApplauseClapping = this.playApplauseClapping.bind(this);
+    this.playUrgencyTick = this.playUrgencyTick.bind(this);
+    this.playPlayerJoined = this.playPlayerJoined.bind(this);
+    this.playDrumroll = this.playDrumroll.bind(this);
+    this.playArenaWelcomeIntro = this.playArenaWelcomeIntro.bind(this);
+    this.speakResultFeedback = this.speakResultFeedback.bind(this);
   }
 
   // Pre-unlock AudioContext on the first user interaction anywhere on page
@@ -193,6 +208,23 @@ class AudioManager {
       this.speakVoice(word, {
         rate: 1.0,
         pitch: number === 0 ? 1.2 : 1.05,
+        volume: 1.0
+      });
+    }
+  }
+
+  speakResultFeedback(type) {
+    if (this.isMuted) return;
+    const messages = {
+      correct: "Correct! Great job.",
+      wrong: "Not quite. Keep going.",
+      timeout: "Time’s up. Stay focused."
+    };
+    const text = messages[type];
+    if (text) {
+      this.speakVoice(text, {
+        rate: 0.95,
+        pitch: type === 'correct' ? 1.1 : 0.95,
         volume: 1.0
       });
     }

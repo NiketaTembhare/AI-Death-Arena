@@ -25,10 +25,8 @@ export default function PlayerView() {
   // Match & Gameplay State
   const [match, setMatch] = useState(null);
   const [questions, setQuestions] = useState([]);
-  const [currentQIndex, setCurrentQIndex] = useState(0);
-  const [selectedOption, setSelectedOption] = useState(null);
-  const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
-  const [answerResult, setAnswerResult] = useState(null);
+  const [submittedAnswersMap, setSubmittedAnswersMap] = useState({});
+  const [nowMs, setNowMs] = useState(getServerTimeMs());
 
   // Direct Calculated Scores
   const [playerScore, setPlayerScore] = useState(0);
@@ -38,12 +36,11 @@ export default function PlayerView() {
 
   // Synchronized Timers & Countdown
   const [countdownNum, setCountdownNum] = useState(null);
-  const [timeLeftSec, setTimeLeftSec] = useState(15);
-  const questionStartTimeRef = useRef(getServerTimeMs());
-  const timerIntervalRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const lastBeepedRef = useRef(null);
   const lastCountdownRoundRef = useRef(null);
+  const lastPlayerUrgencyKeyRef = useRef(null);
+  const spokenVoiceQuestionIdRef = useRef(null);
 
   // 1. Initialize Device Token & Server Clock Sync
   useEffect(() => {
@@ -68,11 +65,61 @@ export default function PlayerView() {
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
       }
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
     };
   }, []);
+
+  // Periodic Ticker for authoritative timer calculation (updates every 250ms during active round)
+  useEffect(() => {
+    if (match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3') {
+      const interval = setInterval(() => {
+        setNowMs(getServerTimeMs());
+      }, 250);
+      return () => clearInterval(interval);
+    }
+  }, [match?.status]);
+
+  // Derived timer & question states for player
+  const isRoundActive = match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3';
+  const totalQuestionsCount = questions.length || 5;
+  const totalRoundDuration = totalQuestionsCount * 10;
+  const startedAtMs = (isRoundActive && match?.round_started_at) ? new Date(match.round_started_at).getTime() : nowMs;
+  const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
+  const isCountdownActive = isRoundActive && elapsedSec < 4.5;
+  const gameElapsedSec = isCountdownActive ? 0 : Math.max(0, elapsedSec - 4.5);
+  const currentQIndex = Math.min(Math.max(0, totalQuestionsCount - 1), Math.floor(gameElapsedSec / 10));
+  const questionTimeLeftSec = isCountdownActive ? 10 : (gameElapsedSec >= totalRoundDuration ? 0 : Math.max(0, Math.ceil(10 - (gameElapsedSec % 10))));
+  const isRoundQuestionsComplete = isRoundActive && gameElapsedSec >= totalRoundDuration;
+
+  // Urgency ticks on Player client during last 5 seconds of active question if answer not yet submitted
+  useEffect(() => {
+    if (!isRoundActive || isCountdownActive || isRoundQuestionsComplete) return;
+    const currentQ = questions[currentQIndex];
+    if (!currentQ || submittedAnswersMap[currentQ.id]) return;
+
+    if (questionTimeLeftSec <= 5 && questionTimeLeftSec > 0) {
+      const key = `${match?.current_round}_${currentQIndex}_${questionTimeLeftSec}`;
+      if (lastPlayerUrgencyKeyRef.current !== key) {
+        lastPlayerUrgencyKeyRef.current = key;
+        audioManager?.playUrgencyTick?.(questionTimeLeftSec);
+      }
+    }
+  }, [isRoundActive, isCountdownActive, isRoundQuestionsComplete, match?.current_round, currentQIndex, questionTimeLeftSec, questions, submittedAnswersMap]);
+
+  // Voice trigger for timeout (No Answer) when question timer hits 0s
+  useEffect(() => {
+    if (!isRoundActive || isCountdownActive || isRoundQuestionsComplete) return;
+    const currentQ = questions[currentQIndex];
+    if (!currentQ || submittedAnswersMap[currentQ.id]) return;
+
+    if (questionTimeLeftSec === 0) {
+      const timeoutKey = `${currentQ.id}_timeout`;
+      if (spokenVoiceQuestionIdRef.current !== timeoutKey) {
+        spokenVoiceQuestionIdRef.current = timeoutKey;
+        audioManager?.playWrong?.();
+        audioManager?.speakResultFeedback?.('timeout');
+      }
+    }
+  }, [isRoundActive, isCountdownActive, isRoundQuestionsComplete, currentQIndex, questionTimeLeftSec, questions, submittedAnswersMap]);
 
   // 2. Fetch Match by Room Code & Re-hydrate player
   useEffect(() => {
@@ -171,7 +218,7 @@ export default function PlayerView() {
     fetchPlayerDirectStats(match.id, player.id, match.current_round);
 
     if (match.status === 'round1' || match.status === 'round2' || match.status === 'round3') {
-      fetchPlayerQuestions(match.id, player.id, match.current_round);
+      fetchPlayerQuestionsAndAnswers(match.id, player.id, match.current_round);
 
       const roundKey = `${match.current_round}_${match.round_started_at || match.status}`;
       if (lastCountdownRoundRef.current !== roundKey) {
@@ -184,7 +231,6 @@ export default function PlayerView() {
           triggerSynchronizedCountdown();
         } else {
           setCountdownNum(null);
-          startPerQuestionTimer(15);
         }
       }
     } else if (match.status === 'final_results') {
@@ -223,12 +269,11 @@ export default function PlayerView() {
           clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = null;
         }
-        startPerQuestionTimer(15);
       }
     }, 950);
   };
 
-  const fetchPlayerQuestions = async (matchId, playerId, roundNum) => {
+  const fetchPlayerQuestionsAndAnswers = async (matchId, playerId, roundNum) => {
     let { data } = await supabase
       .from('match_round_questions')
       .select('question_id, position, questions(*)')
@@ -289,69 +334,35 @@ export default function PlayerView() {
         };
       });
 
+      setQuestions(formattedQ);
+
+      // Load answers already submitted by player in this round
       const { data: answeredRows } = await supabase
         .from('match_answers')
-        .select('question_id')
+        .select('*')
         .eq('match_id', matchId)
         .eq('player_id', playerId)
         .eq('round', roundNum);
 
-      const answeredCount = answeredRows ? answeredRows.length : 0;
-      const resumeIndex = Math.min(answeredCount, formattedQ.length - 1);
-
-      setQuestions(formattedQ);
-      setCurrentQIndex(resumeIndex);
-      if (answeredCount >= formattedQ.length) {
-        setIsAnswerSubmitted(true);
-      } else {
-        setIsAnswerSubmitted(false);
+      const map = {};
+      if (answeredRows) {
+        answeredRows.forEach((r) => {
+          map[r.question_id] = r;
+        });
       }
-      setSelectedOption(null);
-      setAnswerResult(null);
+      setSubmittedAnswersMap(map);
     }
-  };
-
-  const startPerQuestionTimer = (durationSec = 15) => {
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    questionStartTimeRef.current = getServerTimeMs();
-    const targetEndMs = getServerTimeMs() + durationSec * 1000;
-    let lastUrgencySec = null;
-
-    setTimeLeftSec(durationSec);
-
-    timerIntervalRef.current = setInterval(() => {
-      const remainingMs = targetEndMs - getServerTimeMs();
-      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
-
-      setTimeLeftSec(remainingSec);
-
-      // Play rising urgency warning tick on the last 5 seconds (5, 4, 3, 2, 1)
-      if (remainingSec <= 5 && remainingSec > 0 && lastUrgencySec !== remainingSec) {
-        lastUrgencySec = remainingSec;
-        audioManager.playUrgencyTick(remainingSec);
-      }
-
-      if (remainingMs <= 0) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-        handleTimeoutOrAutoAdvance();
-      }
-    }, 150);
   };
 
   const submitAnswer = async (chosenOption) => {
-    if (isAnswerSubmitted || !match || !player || !questions[currentQIndex]) return;
-
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-
-    setIsAnswerSubmitted(true);
-    setSelectedOption(chosenOption);
-
     const currentQ = questions[currentQIndex];
-    const responseTimeMs = getServerTimeMs() - questionStartTimeRef.current;
+    if (!currentQ || !match || !player) return;
+
+    // Reject if timer expired or answer is already submitted for this question
+    if (questionTimeLeftSec <= 0 || submittedAnswersMap[currentQ.id]) return;
+
+    const questionStartInGameMs = startedAtMs + 4500 + currentQIndex * 10000;
+    const responseTimeMs = Math.max(0, getServerTimeMs() - questionStartInGameMs);
 
     let isCorrect = false;
     if (currentQ.round === 1) {
@@ -362,61 +373,41 @@ export default function PlayerView() {
 
     let points = 0;
     if (isCorrect) {
-      const speedBonus = Math.max(0, Math.round((15000 - responseTimeMs) / 300));
+      const speedBonus = Math.max(0, Math.round((10000 - Math.min(10000, responseTimeMs)) / 200));
       points = 100 + speedBonus;
-      audioManager.playCorrect();
-    } else {
-      audioManager.playWrong();
     }
 
-    setAnswerResult({
-      isCorrect,
-      correctOption: currentQ.round === 1 ? 'AI Image' : currentQ.correct_option,
-      points,
-      explanation: currentQ.explanation
-    });
+    const newAnswer = {
+      match_id: match.id,
+      player_id: player.id,
+      round: currentQ.round,
+      question_id: currentQ.id,
+      selected_option: chosenOption,
+      is_correct: isCorrect,
+      points_earned: points,
+      response_time_ms: responseTimeMs
+    };
+
+    // Play appropriate sound effect and voice sentence ONCE per question
+    if (spokenVoiceQuestionIdRef.current !== currentQ.id) {
+      spokenVoiceQuestionIdRef.current = currentQ.id;
+      if (isCorrect) {
+        audioManager?.playCorrect?.();
+        audioManager?.speakResultFeedback?.('correct');
+      } else {
+        audioManager?.playWrong?.();
+        audioManager?.speakResultFeedback?.('wrong');
+      }
+    }
+
+    // Instantly lock local choice in state for zero-delay UI update
+    setSubmittedAnswersMap((prev) => ({ ...prev, [currentQ.id]: newAnswer }));
 
     try {
-      await supabase.from('match_answers').insert([
-        {
-          match_id: match.id,
-          player_id: player.id,
-          round: currentQ.round,
-          question_id: currentQ.id,
-          selected_option: chosenOption,
-          is_correct: isCorrect,
-          points_earned: points,
-          response_time_ms: responseTimeMs
-        }
-      ]);
-
-      // Instantly refresh player direct score & rank after submitting answer
+      await supabase.from('match_answers').insert([newAnswer]);
       fetchPlayerDirectStats(match.id, player.id, match.current_round);
     } catch (err) {
       console.error('Error saving answer:', err);
-    }
-
-    setTimeout(() => {
-      advanceToNextQuestion();
-    }, 2500);
-  };
-
-  const handleTimeoutOrAutoAdvance = () => {
-    if (!isAnswerSubmitted) {
-      submitAnswer('TIMEOUT');
-    }
-  };
-
-  const advanceToNextQuestion = () => {
-    if (currentQIndex < questions.length - 1) {
-      setCurrentQIndex((prev) => prev + 1);
-      setIsAnswerSubmitted(false);
-      setSelectedOption(null);
-      setAnswerResult(null);
-      startPerQuestionTimer(15);
-    } else {
-      setIsAnswerSubmitted(true);
-      fetchPlayerDirectStats(match.id, player.id, match.current_round);
     }
   };
 
@@ -636,10 +627,11 @@ export default function PlayerView() {
 
   // 3. GAMEPLAY SCREENS (ROUNDS 1, 2, 3)
   const currentQ = questions[currentQIndex];
-  const isRoundActive = (match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3');
-  const isFinishedRoundQuestions = isAnswerSubmitted && currentQIndex === 4;
+  const currentAnswer = submittedAnswersMap[currentQ?.id];
+  const isAnswerSubmitted = !!currentAnswer || questionTimeLeftSec <= 0;
+  const selectedOption = currentAnswer?.selected_option || null;
 
-  if (isRoundActive && currentQ && !isFinishedRoundQuestions) {
+  if (isRoundActive && currentQ && !isRoundQuestionsComplete) {
     const avatar = getPlayerAvatar(player.display_name);
 
     return (
@@ -655,10 +647,10 @@ export default function PlayerView() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span style={{ background: '#6C5CE7', color: '#FFFFFF', padding: '0.25rem 0.6rem', borderRadius: '999px', fontWeight: 800, fontSize: '0.85rem' }}>
-              {currentQIndex + 1} / 5
+              {currentQIndex + 1} / {totalQuestionsCount}
             </span>
-            <span className="timer-pill" style={{ fontSize: '0.9rem', padding: '0.25rem 0.6rem' }}>
-              <Clock size={14} /> {timeLeftSec}s
+            <span className="timer-pill" style={{ fontSize: '0.9rem', padding: '0.25rem 0.6rem', color: questionTimeLeftSec <= 5 ? '#E53E3E' : '#2D3436' }}>
+              <Clock size={14} /> {questionTimeLeftSec}s
             </span>
           </div>
         </header>
@@ -673,36 +665,100 @@ export default function PlayerView() {
           </h2>
         </div>
 
-        {/* ZERO-SCROLL PLACEMENT: Answer Feedback Banner right below question prompt */}
-        {answerResult && (
-          <div style={{
-            background: answerResult.isCorrect ? '#E6FFFA' : '#FFF5F5',
-            border: `2px solid ${answerResult.isCorrect ? '#38B2AC' : '#E53E3E'}`,
-            borderRadius: '12px',
-            padding: '0.35rem 0.6rem',
-            textAlign: 'center',
-            marginBottom: '0.25rem',
-            flexShrink: 0,
-            animation: 'fadeIn 0.2s ease'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.05rem' }}>
-              {answerResult.isCorrect ? (
-                <>
+        {/* ZERO-SCROLL PLACEMENT: Compact 2-Line Answer Result Banner */}
+        {(() => {
+          if (!currentAnswer && questionTimeLeftSec > 0) return null;
+
+          let correctOptionText = currentQ.correct_option;
+          if (currentQ.round === 1) {
+            correctOptionText = currentQ.isRealOnLeft ? 'Image B (AI Image)' : 'Image A (AI Image)';
+          }
+
+          const explanationText = currentQ.explanation
+            ? currentQ.explanation
+            : `The correct answer was ${correctOptionText}.`;
+
+          // 1. Correct Answer Selected
+          if (currentAnswer && currentAnswer.is_correct) {
+            const pointsEarned = currentAnswer.points_earned || 100;
+            return (
+              <div style={{
+                background: '#E6FFFA',
+                border: '2px solid #38B2AC',
+                borderRadius: '12px',
+                padding: '0.35rem 0.6rem',
+                marginBottom: '0.25rem',
+                textAlign: 'center',
+                flexShrink: 0,
+                animation: 'fadeIn 0.2s ease'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
                   <CheckCircle2 color="#38B2AC" size={16} />
-                  <strong style={{ color: '#2C7A7B', fontSize: '0.9rem' }}>CORRECT! +{answerResult.points} pts</strong>
-                </>
-              ) : (
-                <>
+                  <strong style={{ color: '#2C7A7B', fontSize: '0.9rem' }}>
+                    ✓ Correct! +{pointsEarned} points
+                  </strong>
+                </div>
+                <p style={{ color: '#4A5568', fontSize: '0.78rem', margin: 0, lineHeight: '1.2' }}>
+                  {explanationText}
+                </p>
+              </div>
+            );
+          }
+
+          // 2. Wrong Answer Selected
+          if (currentAnswer && !currentAnswer.is_correct) {
+            return (
+              <div style={{
+                background: '#FFF5F5',
+                border: '2px solid #E53E3E',
+                borderRadius: '12px',
+                padding: '0.35rem 0.6rem',
+                marginBottom: '0.25rem',
+                textAlign: 'center',
+                flexShrink: 0,
+                animation: 'fadeIn 0.2s ease'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
                   <XCircle color="#E53E3E" size={16} />
-                  <strong style={{ color: '#C53030', fontSize: '0.9rem' }}>INCORRECT</strong>
-                </>
-              )}
-            </div>
-            <p style={{ color: '#4A5568', fontSize: '0.76rem', margin: 0, lineHeight: '1.2' }}>
-              {answerResult.explanation}
-            </p>
-          </div>
-        )}
+                  <strong style={{ color: '#C53030', fontSize: '0.9rem' }}>
+                    ✕ Wrong! +0 points
+                  </strong>
+                </div>
+                <p style={{ color: '#4A5568', fontSize: '0.78rem', margin: 0, lineHeight: '1.2' }}>
+                  Not quite — the correct answer was {correctOptionText}.
+                </p>
+              </div>
+            );
+          }
+
+          // 3. Time's Up (No Answer)
+          if (!currentAnswer && questionTimeLeftSec === 0) {
+            return (
+              <div style={{
+                background: '#FFFAF0',
+                border: '2px solid #DD6B20',
+                borderRadius: '12px',
+                padding: '0.35rem 0.6rem',
+                marginBottom: '0.25rem',
+                textAlign: 'center',
+                flexShrink: 0,
+                animation: 'fadeIn 0.2s ease'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+                  <Clock color="#DD6B20" size={16} />
+                  <strong style={{ color: '#C05621', fontSize: '0.9rem' }}>
+                    ⏱ Time’s up! +0 points
+                  </strong>
+                </div>
+                <p style={{ color: '#4A5568', fontSize: '0.78rem', margin: 0, lineHeight: '1.2' }}>
+                  Time’s up — the correct answer was {correctOptionText}.
+                </p>
+              </div>
+            );
+          }
+
+          return null;
+        })()}
 
         {/* Content Area (Round 1 Images vs Round 2 Logo vs Round 3 Emoji) */}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: currentQ.round === 1 ? 'space-between' : 'space-evenly', gap: '0.35rem', marginBottom: '0.1rem' }}>
@@ -724,8 +780,9 @@ export default function PlayerView() {
                     position: 'relative',
                     padding: 0,
                     background: '#F1F5F9',
-                    cursor: 'pointer',
-                    touchAction: 'manipulation'
+                    cursor: isAnswerSubmitted ? 'default' : 'pointer',
+                    touchAction: 'manipulation',
+                    opacity: isAnswerSubmitted && selectedOption !== (currentQ.isRealOnLeft ? 'real' : 'ai') ? 0.5 : 1
                   }}
                 >
                   <img
@@ -753,8 +810,9 @@ export default function PlayerView() {
                     position: 'relative',
                     padding: 0,
                     background: '#F1F5F9',
-                    cursor: 'pointer',
-                    touchAction: 'manipulation'
+                    cursor: isAnswerSubmitted ? 'default' : 'pointer',
+                    touchAction: 'manipulation',
+                    opacity: isAnswerSubmitted && selectedOption !== (currentQ.isRealOnLeft ? 'ai' : 'real') ? 0.5 : 1
                   }}
                 >
                   <img
@@ -850,10 +908,10 @@ export default function PlayerView() {
   }
 
   // 4. INTERIM ROUND SUMMARY SCREEN (Shown after question 5 or during round results)
-  if (match?.status === 'round1_results' || match?.status === 'round2_results' || isFinishedRoundQuestions) {
+  if (match?.status === 'round1_results' || match?.status === 'round2_results' || isRoundQuestionsComplete) {
     const roundNum = match.current_round || (match.status === 'round1_results' ? 1 : 2);
     const avatar = getPlayerAvatar(player.display_name);
-    const isFinalOrRound3 = match?.status === 'final_results' || (isFinishedRoundQuestions && roundNum === 3);
+    const isFinalOrRound3 = match?.status === 'final_results' || (isRoundQuestionsComplete && roundNum === 3);
     const isTop3Winner = isFinalOrRound3 && (playerRank === 1 || playerRank === 2 || playerRank === 3);
 
     return (

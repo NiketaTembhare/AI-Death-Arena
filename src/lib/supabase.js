@@ -6,9 +6,22 @@ const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 const envUrl = import.meta.env.VITE_SUPABASE_URL;
 const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const supabaseUrl = (envUrl && !envUrl.includes('placeholder')) ? envUrl : defaultUrl;
-const supabaseAnonKey = (envKey && !envKey.includes('placeholder')) ? envKey : defaultKey;
+const isValidUrl = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  const lower = url.toLowerCase();
+  return lower.startsWith('https://') && !lower.includes('placeholder') && !lower.includes('your-project') && !lower.includes('example');
+};
+
+const isValidKey = (key) => {
+  if (!key || typeof key !== 'string') return false;
+  const lower = key.toLowerCase();
+  return !lower.includes('placeholder') && !lower.includes('your-key') && key.length > 20;
+};
+
+const supabaseUrl = isValidUrl(envUrl) ? envUrl : defaultUrl;
+const supabaseAnonKey = isValidKey(envKey) ? envKey : defaultKey;
 
 console.log('⚡ Supabase Connected:', supabaseUrl);
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+

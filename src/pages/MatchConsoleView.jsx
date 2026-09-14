@@ -488,7 +488,7 @@ export default function MatchConsoleView() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'match_players', filter: `match_id=eq.${match.id}` }, (payload) => {
         fetchLiveLeaderboardAndProgress(match.id, matchRef.current?.current_round);
         if (payload.eventType === 'INSERT' && matchRef.current?.status === 'lobby') {
-          audioManager.playPlayerJoined();
+          audioManager?.playPlayerJoined?.();
         }
       })
       .subscribe();
@@ -509,14 +509,17 @@ export default function MatchConsoleView() {
   }, [match?.id]);
 
   // Derived timer & question states for active round
+  const totalQuestionsCount = activeRoundQuestions.length || 5;
+  const totalRoundDuration = totalQuestionsCount * 10;
+
   const isRoundActive = match?.status === 'round1' || match?.status === 'round2' || match?.status === 'round3';
   const startedAtMs = (isRoundActive && match?.round_started_at) ? new Date(match.round_started_at).getTime() : nowMs;
   const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
   const isCountdownActive = isRoundActive && elapsedSec < 4.5;
   const gameElapsedSec = isCountdownActive ? 0 : Math.max(0, elapsedSec - 4.5);
-  const currentQIndex = Math.min(4, Math.floor(gameElapsedSec / 10));
-  const questionTimeLeftSec = isCountdownActive ? 10 : (gameElapsedSec >= 50 ? 0 : Math.max(0, Math.ceil(10 - (gameElapsedSec % 10))));
-  const isRoundQuestionsComplete = isRoundActive && gameElapsedSec >= 50;
+  const currentQIndex = Math.min(Math.max(0, totalQuestionsCount - 1), Math.floor(gameElapsedSec / 10));
+  const questionTimeLeftSec = isCountdownActive ? 10 : (gameElapsedSec >= totalRoundDuration ? 0 : Math.max(0, Math.ceil(10 - (gameElapsedSec % 10))));
+  const isRoundQuestionsComplete = isRoundActive && gameElapsedSec >= totalRoundDuration;
   const currentLiveQuestion = activeRoundQuestions[currentQIndex] || null;
 
   // Guarded Auto-Transition to Round Results / Final Results on 10s Timer Expiry of Final Question
@@ -524,7 +527,7 @@ export default function MatchConsoleView() {
   useEffect(() => {
     if (!match?.id || !isRoundActive) return;
 
-    if (gameElapsedSec >= 50) {
+    if (gameElapsedSec >= totalRoundDuration) {
       const key = `${match.id}_${match.status}`;
       if (autoTransitionKeyRef.current !== key) {
         autoTransitionKeyRef.current = key;
@@ -537,7 +540,7 @@ export default function MatchConsoleView() {
         }
       }
     }
-  }, [match?.id, match?.status, gameElapsedSec, isRoundActive]);
+  }, [match?.id, match?.status, gameElapsedSec, isRoundActive, totalRoundDuration]);
 
   // Play Urgency Ticks on Host during the last 5 seconds of every question
   const lastHostUrgencyKeyRef = useRef(null);
@@ -547,7 +550,7 @@ export default function MatchConsoleView() {
       const key = `${match?.current_round}_${currentQIndex}_${questionTimeLeftSec}`;
       if (lastHostUrgencyKeyRef.current !== key) {
         lastHostUrgencyKeyRef.current = key;
-        audioManager.playUrgencyTick(questionTimeLeftSec);
+        audioManager?.playUrgencyTick?.(questionTimeLeftSec);
       }
     }
   }, [isRoundActive, isCountdownActive, isRoundQuestionsComplete, match?.current_round, currentQIndex, questionTimeLeftSec]);
