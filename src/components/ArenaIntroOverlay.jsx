@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { audioManager } from '../lib/audioManager';
 import { X, Swords } from 'lucide-react';
+import AiMascot from './AiMascot';
 
 export default function ArenaIntroOverlay({ onClose }) {
   const [isFadingOut, setIsFadingOut] = useState(false);
