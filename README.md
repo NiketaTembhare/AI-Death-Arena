@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚔️ AI-DEATH ARENA ⚔️
+# ⚔️ IAE AI-BATTLEGROUND ⚔️
 
 ### *Synchronous Real-Time Expo Booth & Event Trivia Platform*
 

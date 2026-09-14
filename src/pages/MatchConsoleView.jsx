@@ -760,7 +760,7 @@ export default function MatchConsoleView() {
                 margin: '0 auto 1.5rem auto'
               }} />
               <h2 style={{ fontSize: '1.6rem', color: '#FFFFFF', marginBottom: '0.5rem' }}>Loading Match Console...</h2>
-              <p style={{ color: '#A29BFE', fontSize: '0.9rem', fontWeight: 600 }}>Connecting to AI Death Arena server</p>
+              <p style={{ color: '#A29BFE', fontSize: '0.9rem', fontWeight: 600 }}>Connecting to IAE AI-BATTLEGROUND server</p>
             </div>
           </div>
         </div>
@@ -931,7 +931,7 @@ export default function MatchConsoleView() {
             </button>
 
             <div>
-              <h1 className="brand-title" style={{ fontSize: '2rem' }}>AI DEATH ARENA</h1>
+              <h1 className="brand-title" style={{ fontSize: 'clamp(1.2rem, 4vw, 2rem)', whiteSpace: 'nowrap' }}>IAE AI-BATTLEGROUND</h1>
               <p style={{ color: '#A29BFE', fontSize: '0.95rem', fontWeight: 700, letterSpacing: '1px' }}>AI KNOWLEDGE CHECK ⚡ GEN-Z ARENA EDITION</p>
             </div>
           </div>

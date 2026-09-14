@@ -534,7 +534,7 @@ export default function PlayerView() {
 
           <div className="card-light" style={{ width: '100%', maxWidth: '380px' }}>
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <h1 className="brand-title" style={{ fontSize: '1.8rem' }}>AI DEATH ARENA</h1>
+              <h1 className="brand-title" style={{ fontSize: 'clamp(1.1rem, 4.5vw, 1.8rem)', whiteSpace: 'nowrap' }}>IAE AI-BATTLEGROUND</h1>
               <p style={{ color: '#636E72', fontWeight: 600, fontSize: '0.9rem' }}>JOIN ARENA MATCH</p>
             </div>
 
@@ -978,7 +978,7 @@ export default function PlayerView() {
         <Award size={56} color="#FDCB6E" style={{ margin: '0 auto 0.5rem' }} />
         <h2 style={{ fontSize: '2rem' }}>MATCH COMPLETE</h2>
         <p style={{ color: '#636E72', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-          Great effort in AI Death Arena!
+          Great effort in IAE AI-BATTLEGROUND!
         </p>
 
         <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '20px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>

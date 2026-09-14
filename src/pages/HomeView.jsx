@@ -43,9 +43,9 @@ export default function HomeView() {
         color: '#FFFFFF',
         padding: '2rem'
       }}>
-      <div style={{ textAlign: 'center', maxWidth: '420px', width: '100%' }}>
-        <h1 className="brand-title" style={{ fontSize: '2.5rem', marginBottom: '0.25rem' }}>
-          AI DEATH ARENA
+      <div style={{ textAlign: 'center', maxWidth: '440px', width: '100%' }}>
+        <h1 className="brand-title" style={{ fontSize: 'clamp(1.3rem, 5.2vw, 2.2rem)', whiteSpace: 'nowrap', marginBottom: '0.25rem' }}>
+          IAE AI-BATTLEGROUND
         </h1>
         <p style={{ color: '#A29BFE', fontSize: '0.95rem', marginBottom: '2.5rem', fontWeight: 600 }}>
           Synchronous Expo Booth Trivia

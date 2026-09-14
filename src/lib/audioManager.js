@@ -511,9 +511,9 @@ class AudioManager {
       }
     }
 
-    // AI Voice Announcement: "Welcome to AI Death Arena Battle Ground!"
+    // AI Voice Announcement: "Welcome to IAE AI-BATTLEGROUND!"
     setTimeout(() => {
-      this.speakVoice("Welcome to AI Death Arena Battle Ground!", {
+      this.speakVoice("Welcome to IAE AI-BATTLEGROUND!", {
         rate: 0.92,
         pitch: 1.08,
         volume: 1.0

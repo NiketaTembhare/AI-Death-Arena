@@ -268,7 +268,7 @@ export default function ArenaIntroOverlay({ onClose }) {
           margin: '0.8rem 0 1.5rem 0',
           animation: 'ambientTextPulse 3.5s ease-in-out 2.4s infinite alternate'
         }}>
-          {/* Line 1: WELCOME TO AI */}
+          {/* Line 1: WELCOME TO */}
           <div
             style={{
               fontSize: 'clamp(1.05rem, 3.6vw, 1.45rem)',
@@ -276,21 +276,23 @@ export default function ArenaIntroOverlay({ onClose }) {
               textTransform: 'uppercase',
               lineHeight: 1.2,
               marginBottom: '0.25rem',
+              letterSpacing: '0.15em',
               background: 'linear-gradient(90deg, #93C5FD 0%, #38BDF8 50%, #C084FC 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               animation: 'revealWelcomeAI 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both'
             }}
           >
-            WELCOME TO AI
+            WELCOME TO
           </div>
 
-          {/* Line 2: DEATH ARENA (Impact Reveal with Softer Tone) */}
+          {/* Line 2: IAE AI-BATTLEGROUND */}
           <h1
             style={{
-              fontSize: 'clamp(2.1rem, 6.8vw, 3.2rem)',
+              fontSize: 'clamp(1.3rem, 4.8vw, 2.2rem)',
               fontWeight: 900,
-              lineHeight: 1.05,
+              lineHeight: 1.1,
+              whiteSpace: 'nowrap',
               textTransform: 'uppercase',
               margin: 0,
               background: 'linear-gradient(135deg, #F8FAFC 0%, #C084FC 35%, #818CF8 70%, #FB7185 100%)',
@@ -299,7 +301,7 @@ export default function ArenaIntroOverlay({ onClose }) {
               animation: 'impactDeathArena 0.9s cubic-bezier(0.2, 0.9, 0.25, 1) 0.95s both'
             }}
           >
-            DEATH ARENA
+            IAE AI-BATTLEGROUND
           </h1>
 
           {/* Divider Light Line */}
