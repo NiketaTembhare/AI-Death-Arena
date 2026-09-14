@@ -1109,57 +1109,60 @@ export default function MatchConsoleView() {
                 </h2>
               </div>
 
-              {/* Answered Progress Indicator for Host */}
-              {(match.status === 'round1' || match.status === 'round2' || match.status === 'round3') && (
-                <div style={{ background: '#161334', border: '1px solid #00B894', padding: '0.45rem 1.2rem', borderRadius: '14px', textAlign: 'center' }}>
-                  <span style={{ color: '#A29BFE', fontSize: '0.75rem', fontWeight: 700, display: 'block' }}>ANSWERED PROGRESS</span>
-                  <strong style={{ fontSize: '1.2rem', color: '#00B894' }}>
-                    {answeredCount} / {players.length} Players Done
-                  </strong>
+              {/* Right Controls Container (Answered Progress + Round Action Buttons) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
+                {/* Answered Progress Indicator for Host */}
+                {(match.status === 'round1' || match.status === 'round2' || match.status === 'round3') && (
+                  <div style={{ background: '#161334', border: '1px solid #00B894', padding: '0.45rem 1.2rem', borderRadius: '14px', textAlign: 'center' }}>
+                    <span style={{ color: '#A29BFE', fontSize: '0.75rem', fontWeight: 700, display: 'block' }}>ANSWERED PROGRESS</span>
+                    <strong style={{ fontSize: '1.2rem', color: '#00B894' }}>
+                      {answeredCount} / {players.length} Players Done
+                    </strong>
+                  </div>
+                )}
+
+                {/* Sequential Round Progression Controls */}
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  {match.status === 'round1' && (
+                    <button onClick={() => updateMatchStatus('round1_results', 1)} className="btn btn-orange" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}>
+                      SHOW ROUND 1 RESULTS <ArrowRight size={18} />
+                    </button>
+                  )}
+
+                  {match.status === 'round1_results' && (
+                    <button
+                      disabled={isStartingRound || countdownNum !== null}
+                      onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round2', 2)}
+                      className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
+                      style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}
+                    >
+                      {isStartingRound || countdownNum !== null ? 'STARTING ROUND 2...' : 'START ROUND 2'} <Play size={18} />
+                    </button>
+                  )}
+
+                  {match.status === 'round2' && (
+                    <button onClick={() => updateMatchStatus('round2_results', 2)} className="btn btn-orange" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}>
+                      SHOW ROUND 2 RESULTS <ArrowRight size={18} />
+                    </button>
+                  )}
+
+                  {match.status === 'round2_results' && (
+                    <button
+                      disabled={isStartingRound || countdownNum !== null}
+                      onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round3', 3)}
+                      className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
+                      style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}
+                    >
+                      {isStartingRound || countdownNum !== null ? 'STARTING ROUND 3...' : 'START ROUND 3'} <Play size={18} />
+                    </button>
+                  )}
+
+                  {match.status === 'round3' && (
+                    <button onClick={() => updateMatchStatus('final_results', 3)} className="btn btn-yellow" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem', color: '#2D3436' }}>
+                      SHOW FINAL RESULTS <Award size={18} />
+                    </button>
+                  )}
                 </div>
-              )}
-
-              {/* Sequential Round Progression Controls */}
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                {match.status === 'round1' && (
-                  <button onClick={() => updateMatchStatus('round1_results', 1)} className="btn btn-orange" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}>
-                    SHOW ROUND 1 RESULTS <ArrowRight size={18} />
-                  </button>
-                )}
-
-                {match.status === 'round1_results' && (
-                  <button
-                    disabled={isStartingRound || countdownNum !== null}
-                    onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round2', 2)}
-                    className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
-                    style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}
-                  >
-                    {isStartingRound || countdownNum !== null ? 'STARTING ROUND 2...' : 'START ROUND 2'} <Play size={18} />
-                  </button>
-                )}
-
-                {match.status === 'round2' && (
-                  <button onClick={() => updateMatchStatus('round2_results', 2)} className="btn btn-orange" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}>
-                    SHOW ROUND 2 RESULTS <ArrowRight size={18} />
-                  </button>
-                )}
-
-                {match.status === 'round2_results' && (
-                  <button
-                    disabled={isStartingRound || countdownNum !== null}
-                    onClick={() => !isStartingRound && countdownNum === null && updateMatchStatus('round3', 3)}
-                    className={`btn btn-green ${isStartingRound || countdownNum !== null ? 'btn-disabled' : ''}`}
-                    style={{ fontSize: '1rem', padding: '0.6rem 1.25rem' }}
-                  >
-                    {isStartingRound || countdownNum !== null ? 'STARTING ROUND 3...' : 'START ROUND 3'} <Play size={18} />
-                  </button>
-                )}
-
-                {match.status === 'round3' && (
-                  <button onClick={() => updateMatchStatus('final_results', 3)} className="btn btn-yellow" style={{ fontSize: '1rem', padding: '0.6rem 1.25rem', color: '#2D3436' }}>
-                    SHOW FINAL RESULTS <Award size={18} />
-                  </button>
-                )}
               </div>
             </div>
 
