@@ -22,6 +22,7 @@ export default function PlayerView() {
   const [overridePin, setOverridePin] = useState('');
   const [showOverrideInput, setShowOverrideInput] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState('');
 
   // Match & Gameplay State
   const [match, setMatch] = useState(null);
@@ -339,6 +340,13 @@ export default function PlayerView() {
 
       setQuestions(formattedQ);
 
+      // Preload images into browser memory to eliminate pop-in delay during gameplay
+      formattedQ.forEach((q) => {
+        if (q.real_image_url) { const img = new Image(); img.src = q.real_image_url; }
+        if (q.ai_image_url) { const img = new Image(); img.src = q.ai_image_url; }
+        if (q.logo_url) { const img = new Image(); img.src = q.logo_url; }
+      });
+
       // Load answers already submitted by player in this round
       const { data: answeredRows } = await supabase
         .from('match_answers')
@@ -406,7 +414,7 @@ export default function PlayerView() {
     // Instantly lock local choice in state for zero-delay UI update
     setSubmittedAnswersMap((prev) => ({ ...prev, [currentQ.id]: newAnswer }));
 
-    // Send non-blocking background insert to DB without heavy read queries during active gameplay
+    // Non-blocking background insert without heavy read queries during active round
     supabase.from('match_answers').insert([newAnswer]).catch((err) => {
       console.error('Error saving answer:', err);
     });
@@ -418,7 +426,25 @@ export default function PlayerView() {
     if (!cleanName || !match || isJoining) return;
 
     setIsJoining(true);
+    setJoinError('');
+
     try {
+      // Check current active player count in match (Max 15 players)
+      const { data: activePlayersRows } = await supabase
+        .from('match_players')
+        .select('id, device_token')
+        .eq('match_id', match.id)
+        .eq('has_left', false);
+
+      const activeCount = activePlayersRows ? activePlayersRows.length : 0;
+      const isAlreadyJoined = activePlayersRows?.some((p) => p.device_token === deviceToken);
+
+      if (!isAlreadyJoined && activeCount >= 15) {
+        setJoinError('Arena is Full! Maximum 15 players allowed.');
+        setIsJoining(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('match_players')
         .insert([
@@ -547,11 +573,15 @@ export default function PlayerView() {
                   outline: 'none'
                 }}
               />
-              {!isNameValid && (
+              {joinError ? (
+                <p style={{ color: '#FF7675', fontSize: '0.9rem', marginBottom: '1rem', fontWeight: 700 }}>
+                  ⚠️ {joinError}
+                </p>
+              ) : !isNameValid ? (
                 <p style={{ color: '#FF7675', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: 600 }}>
                   Please enter your name to join
                 </p>
-              )}
+              ) : null}
 
               <button
                 type="submit"

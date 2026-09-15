@@ -142,17 +142,8 @@ export default function MatchConsoleView() {
 
     if (!playerRows) return;
 
-    // Active players in lobby/roster (deduplicated by device_token & display_name)
-    const uniquePlayersMap = new Map();
-    playerRows.forEach((p) => {
-      if (!p.has_left) {
-        const key = p.device_token || p.display_name.trim().toLowerCase();
-        if (!uniquePlayersMap.has(key)) {
-          uniquePlayersMap.set(key, p);
-        }
-      }
-    });
-    const activePlayers = Array.from(uniquePlayersMap.values());
+    // Active players in lobby/roster (excludes players who have left/kicked)
+    const activePlayers = playerRows.filter((p) => !p.has_left);
     setPlayers(activePlayers);
 
     // Fetch assigned questions count per player for the current round
@@ -248,7 +239,13 @@ export default function MatchConsoleView() {
           uniqueMap.set(item.question_id, item.questions);
         }
       });
-      setActiveRoundQuestions(Array.from(uniqueMap.values()));
+      const qList = Array.from(uniqueMap.values());
+      setActiveRoundQuestions(qList);
+      qList.forEach((q) => {
+        if (q.real_image_url) { const img = new Image(); img.src = q.real_image_url; }
+        if (q.ai_image_url) { const img = new Image(); img.src = q.ai_image_url; }
+        if (q.logo_url) { const img = new Image(); img.src = q.logo_url; }
+      });
     } else {
       const { data: pool } = await supabase
         .from('questions')
@@ -258,7 +255,14 @@ export default function MatchConsoleView() {
         .order('id', { ascending: true })
         .limit(5);
 
-      if (pool) setActiveRoundQuestions(pool);
+      if (pool) {
+        setActiveRoundQuestions(pool);
+        pool.forEach((q) => {
+          if (q.real_image_url) { const img = new Image(); img.src = q.real_image_url; }
+          if (q.ai_image_url) { const img = new Image(); img.src = q.ai_image_url; }
+          if (q.logo_url) { const img = new Image(); img.src = q.logo_url; }
+        });
+      }
     }
   };
 
@@ -1288,7 +1292,7 @@ export default function MatchConsoleView() {
                     {/* ROUND 1: Answer Options Cards Displayed on Host (Display-Only for Audience) */}
                     {currentLiveQuestion && currentLiveQuestion.round === 1 && (() => {
                       const seedStr = `${match.id}_${currentLiveQuestion.id}`;
-                      
+
                       // Check if question has real_image_url & ai_image_url (Image Comparison format)
                       if (currentLiveQuestion.real_image_url || currentLiveQuestion.ai_image_url) {
                         const isRealOnLeft = getSeededIsRealOnLeft(seedStr);
