@@ -21,6 +21,7 @@ export default function PlayerView() {
   const [isRepeatPlayer, setIsRepeatPlayer] = useState(false);
   const [overridePin, setOverridePin] = useState('');
   const [showOverrideInput, setShowOverrideInput] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
 
   // Match & Gameplay State
   const [match, setMatch] = useState(null);
@@ -215,7 +216,9 @@ export default function PlayerView() {
   useEffect(() => {
     if (!match || !player) return;
 
-    fetchPlayerDirectStats(match.id, player.id, match.current_round);
+    if (match.status?.includes('results')) {
+      fetchPlayerDirectStats(match.id, player.id, match.current_round);
+    }
 
     if (match.status === 'round1' || match.status === 'round2' || match.status === 'round3') {
       fetchPlayerQuestionsAndAnswers(match.id, player.id, match.current_round);
@@ -403,19 +406,18 @@ export default function PlayerView() {
     // Instantly lock local choice in state for zero-delay UI update
     setSubmittedAnswersMap((prev) => ({ ...prev, [currentQ.id]: newAnswer }));
 
-    try {
-      await supabase.from('match_answers').insert([newAnswer]);
-      fetchPlayerDirectStats(match.id, player.id, match.current_round);
-    } catch (err) {
+    // Send non-blocking background insert to DB without heavy read queries during active gameplay
+    supabase.from('match_answers').insert([newAnswer]).catch((err) => {
       console.error('Error saving answer:', err);
-    }
+    });
   };
 
   const handleJoinGame = async (e) => {
     e.preventDefault();
     const cleanName = nameInput.trim();
-    if (!cleanName || !match) return;
+    if (!cleanName || !match || isJoining) return;
 
+    setIsJoining(true);
     try {
       const { data, error } = await supabase
         .from('match_players')
@@ -442,6 +444,8 @@ export default function PlayerView() {
       }
     } catch (err) {
       console.error('Join error:', err);
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -551,11 +555,11 @@ export default function PlayerView() {
 
               <button
                 type="submit"
-                disabled={!isNameValid}
-                className={`btn btn-green ${!isNameValid ? 'btn-disabled' : ''}`}
+                disabled={!isNameValid || isJoining}
+                className={`btn btn-green ${(!isNameValid || isJoining) ? 'btn-disabled' : ''}`}
                 style={{ width: '100%', fontSize: '1.25rem', padding: '1rem' }}
               >
-                ENTER ARENA
+                {isJoining ? 'JOINING ARENA...' : 'ENTER ARENA'}
               </button>
             </form>
           </div>

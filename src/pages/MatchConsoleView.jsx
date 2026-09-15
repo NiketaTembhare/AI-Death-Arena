@@ -142,8 +142,17 @@ export default function MatchConsoleView() {
 
     if (!playerRows) return;
 
-    // Active players in lobby/roster (excludes players who have left/kicked)
-    const activePlayers = playerRows.filter((p) => !p.has_left);
+    // Active players in lobby/roster (deduplicated by device_token & display_name)
+    const uniquePlayersMap = new Map();
+    playerRows.forEach((p) => {
+      if (!p.has_left) {
+        const key = p.device_token || p.display_name.trim().toLowerCase();
+        if (!uniquePlayersMap.has(key)) {
+          uniquePlayersMap.set(key, p);
+        }
+      }
+    });
+    const activePlayers = Array.from(uniquePlayersMap.values());
     setPlayers(activePlayers);
 
     // Fetch assigned questions count per player for the current round
