@@ -515,23 +515,6 @@ export default function PlayerView() {
     return (
       <ArenaBackground>
         <div style={playerContainerStyle}>
-          <div style={{ width: '100%', maxWidth: '380px', marginBottom: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
-            <button
-              onClick={() => navigate('/')}
-              className="btn"
-              style={{
-                background: 'rgba(255, 255, 255, 0.15)',
-                color: '#FFFFFF',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                padding: '0.4rem 0.85rem',
-                fontSize: '0.85rem',
-                backdropFilter: 'blur(8px)'
-              }}
-            >
-              <ArrowLeft size={16} /> HOME
-            </button>
-          </div>
-
           <div className="card-light" style={{ width: '100%', maxWidth: '380px' }}>
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
               <h1 className="brand-title" style={{ fontSize: 'clamp(1.1rem, 4.5vw, 1.8rem)', whiteSpace: 'nowrap' }}>IAE AI-BATTLEGROUND</h1>
