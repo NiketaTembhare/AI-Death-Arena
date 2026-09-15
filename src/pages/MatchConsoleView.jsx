@@ -768,6 +768,145 @@ export default function MatchConsoleView() {
     );
   }
 
+  const getCorrectAnswerText = (q, seedStr) => {
+    if (!q) return '';
+    if (q.round === 1) {
+      const isRealOnLeft = getSeededIsRealOnLeft(seedStr);
+      return isRealOnLeft ? 'Image B (AI Image)' : 'Image A (AI Image)';
+    } else {
+      return q.correct_option || '';
+    }
+  };
+
+  const renderRoundAnswerReview = () => {
+    const roundNum = match?.current_round || (match?.status === 'round1_results' ? 1 : match?.status === 'round2_results' ? 2 : 3);
+    if (!activeRoundQuestions || activeRoundQuestions.length === 0) return null;
+
+    return (
+      <div className="card-console" style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #2D2856', paddingBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <span style={{ fontSize: '1.4rem' }}>📽️</span>
+            <div>
+              <h3 style={{ fontSize: '1.35rem', color: '#FDCB6E', fontWeight: 900, margin: 0, letterSpacing: '0.5px' }}>
+                ROUND {roundNum} — CORRECT ANSWERS
+              </h3>
+              <p style={{ color: '#A29BFE', fontSize: '0.82rem', margin: 0, fontWeight: 600 }}>
+                Review all questions and correct answers for Round {roundNum} on the projector display
+              </p>
+            </div>
+          </div>
+          <span style={{ background: '#00B894', color: '#FFFFFF', padding: '0.3rem 0.75rem', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 800 }}>
+            {activeRoundQuestions.length} Questions
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {activeRoundQuestions.map((q, idx) => {
+            const seedStr = `${match.id}_${q.id}`;
+            const isRealOnLeft = q.round === 1 ? getSeededIsRealOnLeft(seedStr) : true;
+            const correctAnswerText = getCorrectAnswerText(q, seedStr);
+
+            return (
+              <div
+                key={q.id}
+                style={{
+                  background: '#161334',
+                  border: '1px solid #2D2856',
+                  borderRadius: '16px',
+                  padding: '1rem 1.1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.6rem'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem' }}>
+                    <span style={{ background: '#6C5CE7', color: '#FFF', padding: '0.2rem 0.55rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 900, flexShrink: 0 }}>
+                      Q{idx + 1}
+                    </span>
+                    <h4 style={{ color: '#FFFFFF', fontSize: '1.05rem', fontWeight: 800, margin: 0, lineHeight: 1.35 }}>
+                      {q.round === 3 ? (q.prompt_text?.length < 10 ? 'WHICH AI CONCEPT DO THESE EMOJIS REPRESENT?' : q.prompt_text) : q.prompt_text}
+                    </h4>
+                  </div>
+                </div>
+
+                {/* Round 1 Image Previews */}
+                {q.round === 1 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.2rem' }}>
+                    <div style={{
+                      background: '#0F0C29',
+                      border: isRealOnLeft ? '2px solid #2D2856' : '3px solid #00B894',
+                      borderRadius: '12px',
+                      padding: '0.35rem',
+                      position: 'relative',
+                      height: '110px'
+                    }}>
+                      <img src={isRealOnLeft ? q.real_image_url : q.ai_image_url} alt="Option A" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: !isRealOnLeft ? '#00B894' : 'rgba(0,0,0,0.7)', color: '#FFF', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800 }}>
+                        IMAGE A {!isRealOnLeft ? '(AI IMAGE ✓)' : '(REAL)'}
+                      </span>
+                    </div>
+
+                    <div style={{
+                      background: '#0F0C29',
+                      border: isRealOnLeft ? '3px solid #00B894' : '2px solid #2D2856',
+                      borderRadius: '12px',
+                      padding: '0.35rem',
+                      position: 'relative',
+                      height: '110px'
+                    }}>
+                      <img src={isRealOnLeft ? q.ai_image_url : q.real_image_url} alt="Option B" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: isRealOnLeft ? '#00B894' : 'rgba(0,0,0,0.7)', color: '#FFF', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800 }}>
+                        IMAGE B {isRealOnLeft ? '(AI IMAGE ✓)' : '(REAL)'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Round 2 Logo Preview */}
+                {q.round === 2 && q.logo_url && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.2rem' }}>
+                    <div style={{ background: '#FFF', padding: '0.4rem', borderRadius: '10px', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img src={q.logo_url} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Round 3 Emoji Display */}
+                {q.round === 3 && (
+                  <div style={{ fontSize: '1.8rem', margin: '0.1rem 0' }}>
+                    {q.prompt_text}
+                  </div>
+                )}
+
+                {/* Correct Answer Highlighted Box */}
+                <div style={{
+                  background: 'rgba(0, 184, 148, 0.15)',
+                  border: '1.5px solid #00B894',
+                  borderRadius: '10px',
+                  padding: '0.45rem 0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ color: '#00B894', fontWeight: 900, fontSize: '0.9rem' }}>✓ Correct Answer:</span>
+                  <strong style={{ color: '#FFFFFF', fontSize: '0.95rem' }}>{correctAnswerText}</strong>
+                </div>
+
+                {q.explanation && (
+                  <p style={{ color: '#A29BFE', fontSize: '0.8rem', margin: 0, fontStyle: 'italic' }}>
+                    {q.explanation}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderLeaderboardTable = () => {
     if (leaderboard.length === 0) {
       return <p style={{ color: '#A29BFE', textAlign: 'center', padding: '2rem' }}>Waiting for player scores...</p>;
@@ -1410,10 +1549,18 @@ export default function MatchConsoleView() {
                 </div>
               </div>
             ) : (
-              /* Between Rounds (Results Stage): Full-width Leaderboard */
-              <div className="card-console">
-                <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#A29BFE' }}>LIVE ARENA STANDINGS</h3>
-                {renderLeaderboardTable()}
+              /* Between Rounds (Results Stage): 2-Column Layout with Round Answer Review + Leaderboard */
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
+                gap: '1.25rem',
+                alignItems: 'start'
+              }}>
+                {renderRoundAnswerReview()}
+                <div className="card-console" style={{ overflow: 'hidden' }}>
+                  <h3 style={{ fontSize: '1.4rem', marginBottom: '1rem', color: '#A29BFE' }}>LIVE ARENA STANDINGS</h3>
+                  {renderLeaderboardTable()}
+                </div>
               </div>
             )}
           </div>
