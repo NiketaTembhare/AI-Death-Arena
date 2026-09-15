@@ -522,7 +522,7 @@ export default function PlayerView() {
 
   const handleOverrideRepeat = (e) => {
     e.preventDefault();
-    if (overridePin === '0101') {
+    if (overridePin === '012012') {
       setIsRepeatPlayer(false);
     } else {
       alert('Invalid Host PIN');
@@ -570,7 +570,7 @@ export default function PlayerView() {
             <form onSubmit={handleOverrideRepeat}>
               <input
                 type="password"
-                maxLength={4}
+                maxLength={6}
                 value={overridePin}
                 onChange={(e) => setOverridePin(e.target.value)}
                 placeholder="Enter PIN"
