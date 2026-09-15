@@ -522,7 +522,7 @@ export default function PlayerView() {
 
   const handleOverrideRepeat = (e) => {
     e.preventDefault();
-    if (overridePin === '2004') {
+    if (overridePin === '0101') {
       setIsRepeatPlayer(false);
     } else {
       alert('Invalid Host PIN');
