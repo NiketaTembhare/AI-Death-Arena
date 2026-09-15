@@ -9,6 +9,17 @@ import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, ArrowLeft } from 'luc
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
 
+const preloadImage = (src) => {
+  return new Promise((resolve) => {
+    if (!src) return resolve();
+    const img = new Image();
+    img.src = src;
+    if (img.complete) return resolve();
+    img.onload = () => resolve();
+    img.onerror = () => resolve();
+  });
+};
+
 export default function PlayerView() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -23,6 +34,7 @@ export default function PlayerView() {
   const [showOverrideInput, setShowOverrideInput] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
+  const [qImagesReady, setQImagesReady] = useState(false);
 
   // Match & Gameplay State
   const [match, setMatch] = useState(null);
@@ -35,6 +47,18 @@ export default function PlayerView() {
   const [playerRank, setPlayerRank] = useState(null);
   const [roundScore, setRoundScore] = useState(0);
   const [roundCorrect, setRoundCorrect] = useState(0);
+
+  // Derived Live Player Scores from local state (updates 0ms live on option click)
+  const submittedAnswersList = Object.values(submittedAnswersMap);
+  const liveTotalScore = submittedAnswersList.reduce((sum, a) => sum + (a?.points_earned || 0), 0);
+  const currentRoundNum = match?.current_round || 1;
+  const currentRoundAnswers = submittedAnswersList.filter((a) => Number(a?.round) === Number(currentRoundNum));
+  const liveRoundScore = currentRoundAnswers.reduce((sum, a) => sum + (a?.points_earned || 0), 0);
+  const liveRoundCorrect = currentRoundAnswers.filter((a) => a?.is_correct === true).length;
+
+  const displayTotalScore = Math.max(playerScore, liveTotalScore);
+  const displayRoundScore = Math.max(roundScore, liveRoundScore);
+  const displayRoundCorrect = Math.max(roundCorrect, liveRoundCorrect);
 
   // Synchronized Timers & Countdown
   const [countdownNum, setCountdownNum] = useState(null);
@@ -91,6 +115,25 @@ export default function PlayerView() {
   const currentQIndex = Math.min(Math.max(0, totalQuestionsCount - 1), Math.floor(gameElapsedSec / 10));
   const questionTimeLeftSec = isCountdownActive ? 10 : (gameElapsedSec >= totalRoundDuration ? 0 : Math.max(0, Math.ceil(10 - (gameElapsedSec % 10))));
   const isRoundQuestionsComplete = isRoundActive && gameElapsedSec >= totalRoundDuration;
+
+  // Preload & Pre-decode dual images for active question to ensure 100% synchronized reveal
+  useEffect(() => {
+    if (!isRoundActive) return;
+    const currentQ = questions[currentQIndex];
+    if (!currentQ) return;
+
+    if (currentQ.round === 1) {
+      setQImagesReady(false);
+      const imgA = currentQ.isRealOnLeft ? currentQ.real_image_url : currentQ.ai_image_url;
+      const imgB = currentQ.isRealOnLeft ? currentQ.ai_image_url : currentQ.real_image_url;
+
+      Promise.all([preloadImage(imgA), preloadImage(imgB)]).then(() => {
+        setQImagesReady(true);
+      });
+    } else {
+      setQImagesReady(true);
+    }
+  }, [isRoundActive, currentQIndex, questions]);
 
   // Urgency ticks on Player client during last 5 seconds of active question if answer not yet submitted
   useEffect(() => {
@@ -217,9 +260,7 @@ export default function PlayerView() {
   useEffect(() => {
     if (!match || !player) return;
 
-    if (match.status?.includes('results')) {
-      fetchPlayerDirectStats(match.id, player.id, match.current_round);
-    }
+    fetchPlayerDirectStats(match.id, player.id, match.current_round);
 
     if (match.status === 'round1' || match.status === 'round2' || match.status === 'round3') {
       fetchPlayerQuestionsAndAnswers(match.id, player.id, match.current_round);
@@ -340,12 +381,14 @@ export default function PlayerView() {
 
       setQuestions(formattedQ);
 
-      // Preload images into browser memory to eliminate pop-in delay during gameplay
+      // Preload all round images into browser cache so they decode before questions appear
+      const imagePromises = [];
       formattedQ.forEach((q) => {
-        if (q.real_image_url) { const img = new Image(); img.src = q.real_image_url; }
-        if (q.ai_image_url) { const img = new Image(); img.src = q.ai_image_url; }
-        if (q.logo_url) { const img = new Image(); img.src = q.logo_url; }
+        if (q.real_image_url) imagePromises.push(preloadImage(q.real_image_url));
+        if (q.ai_image_url) imagePromises.push(preloadImage(q.ai_image_url));
+        if (q.logo_url) imagePromises.push(preloadImage(q.logo_url));
       });
+      Promise.all(imagePromises);
 
       // Load answers already submitted by player in this round
       const { data: answeredRows } = await supabase
@@ -414,10 +457,12 @@ export default function PlayerView() {
     // Instantly lock local choice in state for zero-delay UI update
     setSubmittedAnswersMap((prev) => ({ ...prev, [currentQ.id]: newAnswer }));
 
-    // Non-blocking background insert without heavy read queries during active round
-    supabase.from('match_answers').insert([newAnswer]).catch((err) => {
+    try {
+      await supabase.from('match_answers').insert([newAnswer]);
+      fetchPlayerDirectStats(match.id, player.id, match.current_round);
+    } catch (err) {
       console.error('Error saving answer:', err);
-    });
+    }
   };
 
   const handleJoinGame = async (e) => {
@@ -429,7 +474,7 @@ export default function PlayerView() {
     setJoinError('');
 
     try {
-      // Check current active player count in match (Max 15 players)
+      // Check current active player count in match (Hard Cap: 15 Players)
       const { data: activePlayersRows } = await supabase
         .from('match_players')
         .select('id, device_token')
@@ -806,7 +851,15 @@ export default function PlayerView() {
                     key={`img_a_${currentQ.id}`}
                     src={currentQ.isRealOnLeft ? currentQ.real_image_url : currentQ.ai_image_url}
                     alt="Option A"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    loading="eager"
+                    fetchPriority="high"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      opacity: qImagesReady ? 1 : 0,
+                      transition: 'opacity 0.15s ease-in'
+                    }}
                     onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
                   />
                   <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.65)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
@@ -836,7 +889,15 @@ export default function PlayerView() {
                     key={`img_b_${currentQ.id}`}
                     src={currentQ.isRealOnLeft ? currentQ.ai_image_url : currentQ.real_image_url}
                     alt="Option B"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    loading="eager"
+                    fetchPriority="high"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      opacity: qImagesReady ? 1 : 0,
+                      transition: 'opacity 0.15s ease-in'
+                    }}
                     onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Sample+Image'; }}
                   />
                   <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.65)', color: '#FFF', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
@@ -947,16 +1008,16 @@ export default function PlayerView() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
               <div style={{ background: '#FFFFFF', padding: '0.75rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                 <span style={{ fontSize: '0.75rem', color: '#636E72', fontWeight: 700, display: 'block' }}>ROUND SCORE</span>
-                <strong style={{ fontSize: '1.5rem', color: '#00B894' }}>+{roundScore} pts</strong>
+                <strong style={{ fontSize: '1.5rem', color: '#00B894' }}>+{displayRoundScore} pts</strong>
               </div>
               <div style={{ background: '#FFFFFF', padding: '0.75rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                 <span style={{ fontSize: '0.75rem', color: '#636E72', fontWeight: 700, display: 'block' }}>ACCURACY</span>
-                <strong style={{ fontSize: '1.5rem', color: '#0984E3' }}>{roundCorrect} / 5</strong>
+                <strong style={{ fontSize: '1.5rem', color: '#0984E3' }}>{displayRoundCorrect} / 5</strong>
               </div>
             </div>
 
             <span style={{ fontSize: '0.8rem', color: '#636E72', fontWeight: 700, display: 'block' }}>TOTAL RUNNING SCORE</span>
-            <strong style={{ fontSize: '2rem', color: '#6C5CE7' }}>{playerScore} pts</strong>
+            <strong style={{ fontSize: '2rem', color: '#6C5CE7' }}>{displayTotalScore} pts</strong>
             {playerRank && (
               <div style={{ marginTop: '0.4rem' }}>
                 <span style={{
@@ -1000,7 +1061,7 @@ export default function PlayerView() {
 
         <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '20px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>
           <span style={{ fontSize: '0.85rem', color: '#636E72', fontWeight: 700, display: 'block' }}>YOUR FINAL SCORE</span>
-          <strong style={{ fontSize: '2.5rem', color: '#6C5CE7' }}>{playerScore} pts</strong>
+          <strong style={{ fontSize: '2.5rem', color: '#6C5CE7' }}>{displayTotalScore} pts</strong>
 
           {playerRank && (
             <div style={{ marginTop: '0.5rem' }}>

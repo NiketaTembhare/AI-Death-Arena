@@ -239,13 +239,7 @@ export default function MatchConsoleView() {
           uniqueMap.set(item.question_id, item.questions);
         }
       });
-      const qList = Array.from(uniqueMap.values());
-      setActiveRoundQuestions(qList);
-      qList.forEach((q) => {
-        if (q.real_image_url) { const img = new Image(); img.src = q.real_image_url; }
-        if (q.ai_image_url) { const img = new Image(); img.src = q.ai_image_url; }
-        if (q.logo_url) { const img = new Image(); img.src = q.logo_url; }
-      });
+      setActiveRoundQuestions(Array.from(uniqueMap.values()));
     } else {
       const { data: pool } = await supabase
         .from('questions')
@@ -255,14 +249,7 @@ export default function MatchConsoleView() {
         .order('id', { ascending: true })
         .limit(5);
 
-      if (pool) {
-        setActiveRoundQuestions(pool);
-        pool.forEach((q) => {
-          if (q.real_image_url) { const img = new Image(); img.src = q.real_image_url; }
-          if (q.ai_image_url) { const img = new Image(); img.src = q.ai_image_url; }
-          if (q.logo_url) { const img = new Image(); img.src = q.logo_url; }
-        });
-      }
+      if (pool) setActiveRoundQuestions(pool);
     }
   };
 
