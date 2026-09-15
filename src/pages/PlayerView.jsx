@@ -5,7 +5,7 @@ import { audioManager } from '../lib/audioManager';
 import { getPlayerAvatar } from '../lib/avatar';
 import { syncServerClock, getServerTimeMs, getClockOffsetMs } from '../lib/serverClock';
 import { getSeededShuffledOptions, getSeededIsRealOnLeft } from '../lib/questionUtils';
-import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, ArrowLeft, Tv } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Award, ShieldAlert, ArrowLeft } from 'lucide-react';
 import ArenaBackground from '../components/ArenaBackground';
 import EmojiRain from '../components/EmojiRain';
 
@@ -985,55 +985,39 @@ export default function PlayerView() {
     );
   }
 
-  // 4. INTERIM ROUND SUMMARY / ANSWER REVEAL SCREEN (Shown when round questions finish or during round results)
-  if (match?.status === 'round1_results' || match?.status === 'round2_results' || match?.status === 'round3_results' || isRoundQuestionsComplete) {
-    const roundNum = match.current_round || (match.status === 'round1_results' ? 1 : match.status === 'round2_results' ? 2 : 3);
+  // 4. INTERIM ROUND SUMMARY SCREEN (Shown after question 5 or during round results)
+  if (match?.status === 'round1_results' || match?.status === 'round2_results' || isRoundQuestionsComplete) {
+    const roundNum = match.current_round || (match.status === 'round1_results' ? 1 : 2);
     const avatar = getPlayerAvatar(player.display_name);
+    const isFinalOrRound3 = match?.status === 'final_results' || (isRoundQuestionsComplete && roundNum === 3);
+    const isTop3Winner = isFinalOrRound3 && (playerRank === 1 || playerRank === 2 || playerRank === 3);
 
     return (
       <div style={playerContainerStyle}>
-        <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center', position: 'relative', zIndex: 10, padding: '2rem 1.5rem' }}>
-          {/* Projector Icon Header */}
-          <div style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
-            background: 'rgba(108, 92, 231, 0.12)',
-            border: '2px solid #6C5CE7',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 1.25rem'
-          }}>
-            <Tv size={32} color="#6C5CE7" />
+        {isTop3Winner && <EmojiRain count={38} />}
+        <div className="card-light" style={{ width: '100%', maxWidth: '380px', textAlign: 'center', position: 'relative', zIndex: 10 }}>
+          <div className="avatar-badge" style={{ background: avatar.bgColor, width: '64px', height: '64px', fontSize: '2rem', margin: '0 auto 0.75rem' }}>
+            {avatar.emoji}
           </div>
-
-          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#6C5CE7', letterSpacing: '1.5px', textTransform: 'uppercase' }}>
-            ROUND {roundNum} RESULTS
+          <h2 style={{ fontSize: '1.6rem', color: '#2D3436' }}>ROUND {roundNum} COMPLETE!</h2>
+          <span style={{ display: 'inline-block', background: '#E0E7FF', color: '#4338CA', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 700, marginTop: '0.4rem', marginBottom: '1.25rem' }}>
+            {player.display_name}
           </span>
 
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 900, color: '#2D3436', marginTop: '0.25rem', marginBottom: '0.5rem' }}>
-            Look at the projector
-          </h2>
-
-          <p style={{ color: '#636E72', fontWeight: 600, fontSize: '0.92rem', marginBottom: '1.5rem' }}>
-            The correct answers for Round {roundNum} are displayed on the main arena projector display.
-          </p>
-
-          <div style={{ background: '#F8FAFC', padding: '1.1rem', borderRadius: '20px', border: '1px solid #E2E8F0', marginBottom: '1.25rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.6rem' }}>
-              <div style={{ background: '#FFFFFF', padding: '0.65rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                <span style={{ fontSize: '0.72rem', color: '#636E72', fontWeight: 700, display: 'block' }}>ROUND SCORE</span>
-                <strong style={{ fontSize: '1.35rem', color: '#00B894' }}>+{displayRoundScore} pts</strong>
+          <div style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '20px', border: '1px solid #E2E8F0', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+              <div style={{ background: '#FFFFFF', padding: '0.75rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.75rem', color: '#636E72', fontWeight: 700, display: 'block' }}>ROUND SCORE</span>
+                <strong style={{ fontSize: '1.5rem', color: '#00B894' }}>+{displayRoundScore} pts</strong>
               </div>
-              <div style={{ background: '#FFFFFF', padding: '0.65rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                <span style={{ fontSize: '0.72rem', color: '#636E72', fontWeight: 700, display: 'block' }}>ACCURACY</span>
-                <strong style={{ fontSize: '1.35rem', color: '#0984E3' }}>{displayRoundCorrect} / 5</strong>
+              <div style={{ background: '#FFFFFF', padding: '0.75rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.75rem', color: '#636E72', fontWeight: 700, display: 'block' }}>ACCURACY</span>
+                <strong style={{ fontSize: '1.5rem', color: '#0984E3' }}>{displayRoundCorrect} / 5</strong>
               </div>
             </div>
 
-            <span style={{ fontSize: '0.75rem', color: '#636E72', fontWeight: 700, display: 'block' }}>TOTAL RUNNING SCORE</span>
-            <strong style={{ fontSize: '1.8rem', color: '#6C5CE7' }}>{displayTotalScore} pts</strong>
+            <span style={{ fontSize: '0.8rem', color: '#636E72', fontWeight: 700, display: 'block' }}>TOTAL RUNNING SCORE</span>
+            <strong style={{ fontSize: '2rem', color: '#6C5CE7' }}>{displayTotalScore} pts</strong>
             {playerRank && (
               <div style={{ marginTop: '0.4rem' }}>
                 <span style={{
@@ -1043,7 +1027,7 @@ export default function PlayerView() {
                   padding: '0.35rem 0.85rem',
                   borderRadius: '12px',
                   fontWeight: 800,
-                  fontSize: '0.85rem',
+                  fontSize: '0.9rem',
                   display: 'inline-block'
                 }}>
                   {playerRank === 1 ? '👑 ARENA RANK #1 (CHAMPION!)' : playerRank === 2 ? '🥈 ARENA RANK #2 (RUNNER UP!)' : playerRank === 3 ? '🥉 ARENA RANK #3 (PODIUM!)' : `ARENA RANK #${playerRank}`}
@@ -1052,9 +1036,9 @@ export default function PlayerView() {
             )}
           </div>
 
-          <div style={{ background: '#EEF2FF', padding: '0.85rem', borderRadius: '14px', border: '1px solid #C7D2FE' }}>
-            <p style={{ color: '#4338CA', fontWeight: 700, fontSize: '0.9rem', margin: 0 }}>
-              Waiting for the host...
+          <div style={{ background: '#EEF2FF', padding: '1rem', borderRadius: '16px', border: '1px solid #C7D2FE' }}>
+            <p style={{ color: '#4338CA', fontWeight: 600, fontSize: '0.9rem' }}>
+              Look at the arena projector display! Waiting for host to reveal round results & start the next round...
             </p>
           </div>
         </div>
